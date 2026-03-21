@@ -1,0 +1,7 @@
+[project]
+name = "ceramicraft-ai-secure-agent"
+version = "0.1.0"
+description = "AI-powered secure agent for ceramics crafting automation"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
