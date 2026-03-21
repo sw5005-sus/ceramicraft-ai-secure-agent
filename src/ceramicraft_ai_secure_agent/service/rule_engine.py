@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from langchain_core.tools import tool
+
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -50,3 +52,19 @@ def evaluate_rules(features: dict[str, Any]) -> dict[str, Any]:
         "triggered_rules": triggered,
         "rule_risk": rule_risk,
     }
+
+
+@tool
+def evaluate_rules_tool(features: dict) -> dict:
+    """Apply all business rules to a feature set and return triggered rules.
+
+    Args:
+        features: Feature dictionary produced by ``extract_features_tool``,
+            containing numeric flags such as ``is_large_amount`` and
+            ``is_high_risk_country``.
+
+    Returns:
+        Dictionary with ``triggered_rules`` (list of rule names that fired)
+        and ``rule_risk`` (bool indicating whether any rule triggered).
+    """
+    return evaluate_rules(features)
