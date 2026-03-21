@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from ceramicraft_ai_secure_agent.service.rule_engine import evaluate_rules
 
 

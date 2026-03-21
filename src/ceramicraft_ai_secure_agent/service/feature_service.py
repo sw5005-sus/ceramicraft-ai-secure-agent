@@ -41,7 +41,11 @@ def extract_features(transaction: dict[str, Any]) -> dict[str, float]:
         "is_large_amount": 1.0 if amount >= LARGE_AMOUNT_THRESHOLD else 0.0,
     }
 
-    logger.debug("Extracted features for transaction %s: %s", transaction.get("transaction_id"), features)
+    logger.debug(
+        "Extracted features for transaction %s: %s",
+        transaction.get("transaction_id"),
+        features,
+    )
     return features
 
 
