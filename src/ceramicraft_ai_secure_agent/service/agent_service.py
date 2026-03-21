@@ -13,7 +13,7 @@ This is the single entry point used by the API layer.
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, cast
 
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
@@ -52,24 +52,28 @@ class _AssessmentState(TypedDict):
 
 def _extract_features_node(state: _AssessmentState) -> dict[str, Any]:
     """Node: extract features from the raw transaction."""
-    features = extract_features_tool.invoke({"transaction": state["transaction"]})
-    return {"features": features}
+    tool_input = cast(Any, {"transaction": state["transaction"]})
+    res = extract_features_tool.invoke(tool_input)
+    return {"features": res}
 
 
 def _evaluate_rules_node(state: _AssessmentState) -> dict[str, Any]:
     """Node: apply business rules to the feature set."""
-    rule_result = evaluate_rules_tool.invoke({"features": state["features"]})
-    return {"rule_result": rule_result}
+    tool_input = cast(Any, {"features": state["features"]})
+    res = evaluate_rules_tool.invoke(tool_input)
+    return {"rule_result": res}
 
 
 def _predict_node(state: _AssessmentState) -> dict[str, Any]:
     """Node: run the ML model on the feature set."""
-    ml_result = predict_tool.invoke({"features": state["features"]})
-    return {"ml_result": ml_result}
+    tool_input = cast(Any, {"features": state["features"]})
+    res = predict_tool.invoke(tool_input)
+    return {"ml_result": res}
 
 
 def _compute_score_node(state: _AssessmentState) -> dict[str, Any]:
     """Node: combine rule and ML signals into a composite risk score."""
+    # state already unpacked at upstream node, use directly
     score_result = risk_scoring.compute_score(state["rule_result"], state["ml_result"])
     return {"score_result": score_result}
 
@@ -111,7 +115,7 @@ def _llm_judge_node(state: _AssessmentState) -> dict[str, Any]:
 # Build and compile the LangGraph workflow (module-level singleton)
 # ---------------------------------------------------------------------------
 
-_builder: StateGraph = StateGraph(_AssessmentState)
+_builder: StateGraph = StateGraph(cast(Any, _AssessmentState))
 _builder.add_node("extract_features", _extract_features_node)
 _builder.add_node("evaluate_rules", _evaluate_rules_node)
 _builder.add_node("predict", _predict_node)
@@ -120,7 +124,7 @@ _builder.add_node("llm_judge", _llm_judge_node)
 
 _builder.set_entry_point("extract_features")
 _builder.add_edge("extract_features", "evaluate_rules")
-_builder.add_edge("evaluate_rules", "predict")
+_builder.add_edge("extract_features", "predict")
 _builder.add_edge("predict", "compute_score")
 _builder.add_edge("compute_score", "llm_judge")
 _builder.add_edge("llm_judge", END)
@@ -135,7 +139,7 @@ def _get_llm() -> ChatOpenAI:
     """Return a module-level ChatOpenAI singleton (created on first use)."""
     global _llm
     if _llm is None:
-        _llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+        _llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0)
     return _llm
 
 
@@ -178,7 +182,7 @@ def assess_risk(transaction: dict[str, Any]) -> dict[str, Any]:
         "recommendation": "",
     }
 
-    final_state: _AssessmentState = _graph.invoke(initial_state)
+    final_state = cast(_AssessmentState, _graph.invoke(initial_state))
     score = final_state["score_result"]
 
     assessment: dict[str, Any] = {

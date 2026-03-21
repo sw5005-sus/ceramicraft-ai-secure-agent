@@ -4,10 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from ceramicraft_ai_secure_agent.service import agent_service
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -105,7 +102,10 @@ class TestAssessRisk:
         assert result["transaction_id"] == "unknown"
 
     def test_llm_recommendation_used_when_api_key_present(self):
-        """When OPENAI_API_KEY is set in the environment the LLM node should be invoked."""
+        """
+        When OPENAI_API_KEY is set in the environment,
+        the LLM node should be invoked.
+        """
         fake_response = MagicMock()
         fake_response.content = "LLM-generated recommendation."
 
