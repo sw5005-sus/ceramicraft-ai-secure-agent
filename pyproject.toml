@@ -1,7 +1,42 @@
 [project]
 name = "ceramicraft-ai-secure-agent"
 version = "0.1.0"
-description = "AI-powered secure agent for ceramics crafting automation"
+description = "AI-powered secure agent for detecting risky users and abnormal transactions in Ceramicraft"
 readme = "README.md"
-requires-python = ">=3.12"
-dependencies = []
+requires-python = ">=3.11,<3.13" # 建议调整为 3.11 或 3.12 以获得最佳 ML 库兼容性
+authors = [
+    { name = "Your Name", email = "your.email@example.com" }
+]
+# 核心运行依赖：涵盖了 Module 2 (Security) 和 Module 3 (Agentic AI)
+dependencies = [
+    "fastapi>=0.110.0",         # 
+    "uvicorn[standard]>=0.29.0", # 
+    "pydantic>=2.6.0",          # 
+    "scikit-learn>=1.4.0",      # 用于异常检测模型 
+    "langgraph>=0.0.10",        # Module 3: 核心 Agent 框架 
+    "langchain-openai>=0.1.0",  # 默认 LLM 集成
+    "guardrails-ai>=0.4.0",     # Module 2: AI 安全防护栏 
+    "shap>=0.44.0",             # Module 1: 用于 Explainable AI (XAI) 
+]
+
+[dependency-groups]
+# 开发与测试依赖：对应 Module 4 (Deployment/Testing)
+dev = [
+    "pytest>=8.1.0",            # [cite: 10, 8]
+    "httpx>=0.27.0",            # 
+    "ruff>=0.3.0",              # 代码规范与安全静态检查
+    "bandit>=1.7.0",            # 专门针对 Python 的安全扫描工具 
+]
+
+[tool.uv]
+# 确保团队成员使用一致的 Python 版本
+default-groups = ["dev"]
+
+[tool.ruff]
+# 配置代码检查，符合 Responsible AI 的代码整洁要求
+line-length = 88
+select = ["E", "F", "I", "S"] # S 代表 Security 检查
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

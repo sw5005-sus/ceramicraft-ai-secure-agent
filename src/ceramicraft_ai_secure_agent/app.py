@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
-from api.risk_api import router as risk_router
-from utils.logger import get_logger
+from ceramicraft_ai_secure_agent.api.risk_api import router as risk_router
+from ceramicraft_ai_secure_agent.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

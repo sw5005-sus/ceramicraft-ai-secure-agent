@@ -11,7 +11,7 @@ import pickle
 from pathlib import Path
 from typing import Any
 
-from utils.logger import get_logger
+from ceramicraft_ai_secure_agent.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

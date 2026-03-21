@@ -7,8 +7,8 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from service.agent_service import assess_risk
-from utils.logger import get_logger
+from ceramicraft_ai_secure_agent.service.agent_service import assess_risk
+from ceramicraft_ai_secure_agent.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
