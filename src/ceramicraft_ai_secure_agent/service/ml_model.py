@@ -11,7 +11,7 @@ import pickle
 from pathlib import Path
 from typing import Any
 
-from utils.logger import get_logger
+from ceramicraft_ai_secure_agent.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -60,7 +60,9 @@ def predict(features: dict[str, Any]) -> dict[str, Any]:
     fraud_probability: float = float(model.predict_proba(feature_vector)[0][1])
     ml_prediction: int = int(model.predict(feature_vector)[0])
 
-    logger.info("ML prediction: label=%d, probability=%.4f", ml_prediction, fraud_probability)
+    logger.info(
+        "ML prediction: label=%d, probability=%.4f", ml_prediction, fraud_probability
+    )
 
     return {
         "fraud_probability": fraud_probability,

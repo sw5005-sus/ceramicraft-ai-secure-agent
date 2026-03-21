@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from service.rule_engine import LARGE_AMOUNT_THRESHOLD
-from utils.logger import get_logger
+from ceramicraft_ai_secure_agent.service.rule_engine import LARGE_AMOUNT_THRESHOLD
+from ceramicraft_ai_secure_agent.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -41,7 +41,11 @@ def extract_features(transaction: dict[str, Any]) -> dict[str, float]:
         "is_large_amount": 1.0 if amount >= LARGE_AMOUNT_THRESHOLD else 0.0,
     }
 
-    logger.debug("Extracted features for transaction %s: %s", transaction.get("transaction_id"), features)
+    logger.debug(
+        "Extracted features for transaction %s: %s",
+        transaction.get("transaction_id"),
+        features,
+    )
     return features
 
 

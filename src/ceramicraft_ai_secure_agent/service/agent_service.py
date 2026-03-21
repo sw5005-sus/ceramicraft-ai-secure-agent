@@ -10,8 +10,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from service import feature_service, ml_model, risk_scoring, rule_engine
-from utils.logger import get_logger
+from ceramicraft_ai_secure_agent.service import (
+    feature_service,
+    ml_model,
+    risk_scoring,
+    rule_engine,
+)
+from ceramicraft_ai_secure_agent.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

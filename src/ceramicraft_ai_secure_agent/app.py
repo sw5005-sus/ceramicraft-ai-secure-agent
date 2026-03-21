@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
-from api.risk_api import router as risk_router
-from utils.logger import get_logger
+from ceramicraft_ai_secure_agent.api.risk_api import router as risk_router
+from ceramicraft_ai_secure_agent.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -28,7 +28,13 @@ async def health_check() -> dict[str, str]:
 
 
 if __name__ == "__main__":
+    import os
+
     import uvicorn
 
-    logger.info("Starting AI Secure Agent API server …")
-    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=False)
+    host = os.getenv("HOST", "127.0.0.1")
+    port = int(os.getenv("PORT", 8000))
+    logger.info("Starting AI Secure Agent API server on %s:%s ...", host, port)
+    uvicorn.run(
+        "ceramicraft_ai_secure_agent.app:app", host=host, port=port, reload=False
+    )
