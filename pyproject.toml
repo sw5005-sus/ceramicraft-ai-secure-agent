@@ -15,12 +15,11 @@ dependencies = [
     "scikit-learn>=1.4.0",      # 用于异常检测模型 
     "langgraph>=0.0.10",        # Module 3: 核心 Agent 框架 
     "langchain-openai>=0.1.0",  # 默认 LLM 集成
-    "guardrails-ai>=0.4.0",     # Module 2: AI 安全防护栏 
-    "shap>=0.44.0",             # Module 1: 用于 Explainable AI (XAI) 
+    "joblib",
 ]
 
 [dependency-groups]
-# 开发与测试依赖：对应 Module 4 (Deployment/Testing)
+# 开发与测试依赖
 dev = [
     "pytest>=8.1.0",            # [cite: 10, 8]
     "pytest-cov>=6.0.0",        # 单测覆盖率计算
@@ -28,6 +27,19 @@ dev = [
     "ruff>=0.3.0",              # 代码规范与安全静态检查
     "bandit>=1.7.0",            # 专门针对 Python 的安全扫描工具 
     "ty>=0.0.22",
+    "numpy<2.0",
+]  
+# 模型训练环境
+train = [
+    "pandas",
+    "matplotlib",
+    "mlflow",
+    "numpy<2.0"
+]
+
+optional = [
+    "guardrails-ai>=0.4.0",     # Module 2: AI 安全防护栏 
+    "shap>=0.44.0",             # Module 1: 用于 Explainable AI (XAI) 
 ]
 
 [tool.uv]

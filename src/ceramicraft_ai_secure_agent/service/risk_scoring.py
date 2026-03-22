@@ -43,7 +43,7 @@ def compute_score(
           - ``triggered_rules`` (list[str]): rules that fired.
           - ``fraud_probability`` (float): raw ML probability.
     """
-    rule_signal: float = 1.0 if rule_result.get("rule_risk") else 0.0
+    rule_signal: float = float(rule_result.get("rule_score", 0.0))
     ml_signal: float = float(ml_result.get("fraud_probability", 0.0))
 
     risk_score: float = round(RULE_WEIGHT * rule_signal + ML_WEIGHT * ml_signal, 4)
@@ -61,7 +61,7 @@ def compute_score(
     return {
         "risk_score": risk_score,
         "risk_level": risk_level,
-        "triggered_rules": rule_result.get("triggered_rules", []),
+        "triggered_rules": rule_result.get("hits", []),
         "fraud_probability": ml_signal,
     }
 

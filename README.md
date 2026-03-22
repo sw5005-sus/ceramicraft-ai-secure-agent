@@ -96,7 +96,7 @@ export OPENAI_API_KEY=sk-...
 
 ### 3. Start the server
 ```bash
-uv run uvicorn ceramicraft_ai_secure_agent.app:app --reload
+uv run uvicorn ceramicraft_ai_secure_agent.app:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### 4. Test the API
@@ -118,4 +118,14 @@ curl -X 'POST' \
 ### 5. Run tests
 ```bash
 uv run pytest
+```
+
+### 6. Model Training
+```
+uv sync --group train
+uv run --group train python src/ceramicraft_ai_secure_agent/data/train_data_gen.py
+uv run --group train python src/ceramicraft_ai_secure_agent/model/train_model.py
+# open mlflow
+source .venv/bin/activate
+mlflow ui
 ```
