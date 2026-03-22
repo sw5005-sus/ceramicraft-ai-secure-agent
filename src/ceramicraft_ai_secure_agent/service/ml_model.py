@@ -11,6 +11,8 @@ import pickle
 from pathlib import Path
 from typing import Any
 
+from langchain_core.tools import tool
+
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -68,3 +70,18 @@ def predict(features: dict[str, Any]) -> dict[str, Any]:
         "fraud_probability": fraud_probability,
         "ml_prediction": ml_prediction,
     }
+
+
+@tool
+def predict_tool(features: dict) -> dict:
+    """Run the ML fraud-detection model on a feature set.
+
+    Args:
+        features: Feature dictionary produced by ``extract_features_tool``,
+            with keys matching the model's expected feature columns.
+
+    Returns:
+        Dictionary with ``fraud_probability`` (float in [0, 1]) and
+        ``ml_prediction`` (int: 1 = fraud, 0 = legitimate).
+    """
+    return predict(features)

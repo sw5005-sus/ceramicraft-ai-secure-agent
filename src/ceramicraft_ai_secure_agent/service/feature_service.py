@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from langchain_core.tools import tool
+
 from ceramicraft_ai_secure_agent.service.rule_engine import LARGE_AMOUNT_THRESHOLD
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
 
@@ -54,3 +56,18 @@ def _safe_log(value: float) -> float:
     import math
 
     return math.log1p(max(value, 0.0))
+
+
+@tool
+def extract_features_tool(transaction: dict) -> dict:
+    """Extract a flat feature dictionary from a raw transaction payload.
+
+    Args:
+        transaction: Raw transaction payload dict containing fields such as
+            ``amount``, ``country``, and ``merchant_category``.
+
+    Returns:
+        Dictionary mapping feature names to numeric values ready for the
+        rule engine and ML model.
+    """
+    return extract_features(transaction)
