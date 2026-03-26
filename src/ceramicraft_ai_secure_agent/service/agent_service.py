@@ -15,7 +15,7 @@ from __future__ import annotations
 import os
 from typing import Any, cast
 
-from langchain_core.messages import HumanMessage
+import mlflow
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 from typing_extensions import TypedDict
@@ -25,6 +25,23 @@ from ceramicraft_ai_secure_agent.service.feature_service import extract_features
 from ceramicraft_ai_secure_agent.service.ml_model import predict_tool
 from ceramicraft_ai_secure_agent.service.rule_engine import evaluate_rules_tool
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
+from ceramicraft_ai_secure_agent.utils.mlflow_trace import (
+    LLM_MODEL_NAME,
+    PROMPT_NAME,
+    PROMPT_VERSION,
+    safe_update_current_trace,
+)
+
+# ---------------------------------------------------------------------------
+# MLflow and prompt setup
+# ---------------------------------------------------------------------------
+
+mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
+mlflow.set_experiment("ai-secure-agent-llm-traces")
+mlflow.langchain.autolog()
+
+PROMPT_URI = "prompts:/fraud_recommendation_prompt@production"
+loaded_prompt = mlflow.genai.load_prompt(PROMPT_URI)
 
 logger = get_logger(__name__)
 
@@ -78,6 +95,7 @@ def _compute_score_node(state: _AssessmentState) -> dict[str, Any]:
     return {"score_result": score_result}
 
 
+@mlflow.trace(name="llm_judge_node")
 def _llm_judge_node(state: _AssessmentState) -> dict[str, Any]:
     """Node: use an OpenAI LLM to produce a risk judgment and recommendation.
 
@@ -92,23 +110,42 @@ def _llm_judge_node(state: _AssessmentState) -> dict[str, Any]:
             "OPENAI_API_KEY not set – using rule-based recommendation fallback."
         )
         return {"recommendation": _build_recommendation(score["risk_level"])}
+    _update_trace_with_score(state)
+    prompt = _build_llm_prompt(score)
+    llm = _get_llm()
+    response = llm.invoke(prompt)
+    return {"recommendation": response.content}
 
+
+def _update_trace_with_score(state: _AssessmentState) -> None:
+    transaction = state["transaction"]
+    score = state["score_result"]
+
+    trace_metadata: dict[str, Any] = {
+        "transaction_id": transaction.get("transaction_id", "unknown"),
+        "risk_level": score["risk_level"],
+        "risk_score": score["risk_score"],
+        "fraud_probability": score["fraud_probability"],
+        "triggered_rules_count": len(score["triggered_rules"]),
+        "prompt_name": PROMPT_NAME,
+        "prompt_version": PROMPT_VERSION,
+        "llm_model": LLM_MODEL_NAME,
+        "fallback_used": not bool(os.environ.get("OPENAI_API_KEY", "")),
+    }
+    safe_update_current_trace(metadata=trace_metadata)
+
+
+def _build_llm_prompt(score: dict[str, Any]) -> str:
+    """Build the recommendation prompt for the LLM."""
     triggered = (
         ", ".join(score["triggered_rules"]) if score["triggered_rules"] else "none"
     )
-    prompt = (
-        "You are a fraud risk assessment expert. "
-        "Based on the following automated risk analysis, provide a single concise "
-        "recommendation sentence for this transaction.\n\n"
-        f"Risk Score: {score['risk_score']:.4f}\n"
-        f"Risk Level: {score['risk_level']}\n"
-        f"Triggered Rules: {triggered}\n"
-        f"Fraud Probability: {score['fraud_probability']:.4f}"
+    return loaded_prompt.format(
+        risk_score=f"{score['risk_score']:.4f}",
+        risk_level=score["risk_level"],
+        triggered_rules=triggered,
+        fraud_probability=f"{score['fraud_probability']:.4f}",
     )
-
-    llm = _get_llm()
-    response = llm.invoke([HumanMessage(content=prompt)])
-    return {"recommendation": response.content}
 
 
 # ---------------------------------------------------------------------------
@@ -148,6 +185,7 @@ def _get_llm() -> ChatOpenAI:
 # ---------------------------------------------------------------------------
 
 
+@mlflow.trace(name="assess_risk")
 def assess_risk(transaction: dict[str, Any]) -> dict[str, Any]:
     """Run the complete risk-assessment pipeline for a transaction.
 
@@ -172,7 +210,16 @@ def assess_risk(transaction: dict[str, Any]) -> dict[str, Any]:
     """
     txn_id: str = str(transaction.get("transaction_id", "unknown"))
     logger.info("Starting risk assessment for transaction: %s", txn_id)
-
+    safe_update_current_trace(
+        metadata={
+            "transaction_id": txn_id,
+            "service": "ai-secure-agent",
+            "workflow": "risk_assessment_graph",
+            "prompt_name": PROMPT_NAME,
+            "prompt_version": PROMPT_VERSION,
+            "llm_model": LLM_MODEL_NAME,
+        }
+    )
     initial_state: _AssessmentState = {
         "transaction": transaction,
         "features": {},

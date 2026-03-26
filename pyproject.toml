@@ -9,13 +9,17 @@ authors = [
 ]
 # 核心运行依赖：涵盖了 Module 2 (Security) 和 Module 3 (Agentic AI)
 dependencies = [
-    "fastapi>=0.110.0",         # 
-    "uvicorn[standard]>=0.29.0", # 
-    "pydantic>=2.6.0",          # 
-    "scikit-learn>=1.4.0",      # 用于异常检测模型 
-    "langgraph>=0.0.10",        # Module 3: 核心 Agent 框架 
-    "langchain-openai>=0.1.0",  # 默认 LLM 集成
+    "fastapi>=0.110.0", #
+    "uvicorn[standard]>=0.29.0", #
+    "pydantic>=2.6.0", #
+    "scikit-learn>=1.4.0", # 用于异常检测模型
+    "langgraph>=0.0.10", # Module 3: 核心 Agent 框架
+    "langchain-openai>=0.1.0", # 默认 LLM 集成
     "joblib",
+    "boto3",
+    "mlflow[extras,scikit-learn]>=3,<4",
+    "setuptools<82",
+    "langchain>=1.2.13",
 ]
 
 [dependency-groups]

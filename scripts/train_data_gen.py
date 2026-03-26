@@ -29,11 +29,11 @@ def weighted_choice(prob: float) -> bool:
 
 def generate_normal_sample() -> Sample:
     """
-    正常用户分布：
-    - 下单频率较低
-    - IP/设备较稳定
-    - 账号年龄偏大
-    - 客单价中等
+    Normal user distribution:
+    - Lower order frequency
+    - Stable IP/device usage
+    - Older account age
+    - Moderate average order amount
     """
     order_count_last_1h = max(0, int(random.gauss(1.5, 1.2)))
     order_count_last_24h = max(
@@ -61,12 +61,12 @@ def generate_normal_sample() -> Sample:
 
 def generate_fraud_sample() -> Sample:
     """
-    欺诈/刷单用户分布：
-    - 高频下单
-    - 多 IP / 多设备
-    - 账号较新
-    - 小额订单更常见
-    但仍加入噪声，避免“规则复制器”
+    Fraudulent/bot user distribution:
+    - High order frequency
+    - Multiple IPs / multiple devices
+    - Relatively new accounts
+    - Smaller order amounts are more common
+    But still add noise to avoid "rule replicators"
     """
     mode = secrets.SystemRandom().choice(["burst", "multi_ip", "low_amount", "mixed"])
 
@@ -123,8 +123,10 @@ def generate_fraud_sample() -> Sample:
 
 def assign_label_with_noise(sample: Sample) -> int:
     """
-    不直接使用生成函数里的原始标签，而是基于风险分数 + 噪声重新打标。
-    这样更像真实世界，也避免模型只是机械复刻规则。
+    Do not directly use the original labels from the generation functions, 
+    but instead re-label based on the risk score + noise.
+    This makes it more like the real world and 
+    avoids the model simply replicating the rules mechanically.
     """
     risk_score = 0.0
 
@@ -158,16 +160,16 @@ def assign_label_with_noise(sample: Sample) -> int:
     elif sample.account_age_days <= 90:
         risk_score += 0.5
 
-    # 加噪声：模拟现实中的不确定性
+    # Add noise: simulate uncertainty in the real world
     risk_score += secrets.SystemRandom().uniform(-0.8, 0.8)
 
-    # 模糊区间：制造边界样本
+    # Fuzzy interval: create boundary samples
     if risk_score >= 3.0:
         return 1
     if risk_score <= 1.4:
         return 0
 
-    # 中间区域按概率决定，而不是硬阈值
+    # The intermediate area is determined by probability, not hard thresholds
     prob = (risk_score - 1.4) / (3.0 - 1.4)
     return 1 if secrets.SystemRandom().random() < prob else 0
 
@@ -183,7 +185,7 @@ def generate_dataset(
     fraud_target = int(n_samples * fraud_ratio)
 
     for _ in range(n_samples):
-        # 先控制“候选样本”分布
+        # First control the distribution of "candidate samples"
         if len([r for r in rows if r["label"] == 1]) < fraud_target and weighted_choice(
             fraud_ratio + 0.08
         ):
@@ -191,7 +193,7 @@ def generate_dataset(
         else:
             sample = generate_normal_sample()
 
-        # 重新打标
+        # Re-label the sample
         label = assign_label_with_noise(sample)
         row = asdict(sample)
         row["label"] = label
@@ -199,7 +201,7 @@ def generate_dataset(
 
     df = pd.DataFrame(rows)
 
-    # 如果最终 fraud 比例偏太多，做一次轻微重采样修正
+    # If the final fraud ratio deviates too much, perform a slight resampling correction
     current_ratio = df["label"].mean()
     if current_ratio < fraud_ratio * 0.7 or current_ratio > fraud_ratio * 1.4:
         fraud_df = df[df["label"] == 1]

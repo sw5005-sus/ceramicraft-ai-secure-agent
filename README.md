@@ -71,12 +71,7 @@ The public entry point `assess_risk(transaction)` returns:
 
 ```json
 {
-  "transaction_id": "txn_001",
-  "risk_score": 0.82,
-  "risk_level": "HIGH",
-  "triggered_rules": ["large_amount", "high_risk_country", "large_amount_in_high_risk_country"],
-  "fraud_probability": 0.9,
-  "recommendation": "Block this transaction immediately – multiple high-risk signals detected."
+  "transaction_id": "txn_001"
 }
 ```
 
@@ -123,7 +118,7 @@ uv run pytest
 ### 6. Model Training
 ```
 uv sync --group train
-uv run --group train python src/ceramicraft_ai_secure_agent/data/train_data_gen.py
+uv run --group train python script/train_data_gen.py
 uv run --group train python src/ceramicraft_ai_secure_agent/model/train_model.py
 # open mlflow
 source .venv/bin/activate

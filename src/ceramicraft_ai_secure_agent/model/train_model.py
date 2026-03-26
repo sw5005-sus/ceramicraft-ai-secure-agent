@@ -1,6 +1,12 @@
 import json
+import os
 from pathlib import Path
 
+import matplotlib.pyplot as plt
+import mlflow
+import mlflow.sklearn
+import pandas as pd
+from mlflow import MlflowClient
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     ConfusionMatrixDisplay,
@@ -23,30 +29,60 @@ FEATURE_COLUMNS: list[str] = [
 ]
 
 
+def ensure_registered_model(client: MlflowClient, model_name: str) -> None:
+    try:
+        client.get_registered_model(model_name)
+        print(f"Registered model already exists: {model_name}")
+    except Exception:
+        client.create_registered_model(model_name)
+        print(f"Created registered model: {model_name}")
+
+
 def main() -> None:
     # ---------- Config ----------
-    experiment_name = "ai-secure-agent-logistic-regression"
-    data_path = "data/fraud_training_data.csv"
-    model_output_dir = Path("model")
-    artifact_output_dir = Path("artifacts")
-    model_output_dir.mkdir(parents=True, exist_ok=True)
-    artifact_output_dir.mkdir(parents=True, exist_ok=True)
+    experiment_name = os.environ.get(
+        "MLFLOW_EXPERIMENT_NAME",
+        "ai-secure-agent-logistic-regression",
+    )
+    registered_model_name = os.environ.get(
+        "MLFLOW_REGISTERED_MODEL_NAME",
+        "ai-secure-agent-fraud-detector",
+    )
+    run_name = os.environ.get(
+        "MLFLOW_RUN_NAME",
+        "logistic_regression_baseline",
+    )
 
+    data_path = os.environ.get("TRAINING_DATA_PATH", "data/fraud_training_data.csv")
     label_column = "label"
 
-    test_size = 0.2
-    random_state = 42
-    max_iter = 1000
+    test_size = float(os.environ.get("TEST_SIZE", "0.2"))
+    random_state = int(os.environ.get("RANDOM_STATE", "42"))
+    max_iter = int(os.environ.get("MAX_ITER", "1000"))
+
+    dataset_version = os.environ.get("DATASET_VERSION", "v1")
+    git_commit = os.environ.get("GIT_COMMIT", "unknown")
+    model_alias = os.environ.get("MLFLOW_MODEL_ALIAS", "champion")
+
+    mlflow_tracking_uri = os.environ.get("MLFLOW_TRACKING_URI")
+    if not mlflow_tracking_uri:
+        raise ValueError(
+            "MLFLOW_TRACKING_URI is not set, example: http://<mlflow-host>:5000"
+        )
+
+    artifact_output_dir = Path("artifacts")
+    artifact_output_dir.mkdir(parents=True, exist_ok=True)
 
     # ---------- MLflow setup ----------
-    # 本地默认会把 runs 存到 ./mlruns
-    # todo 用 mlflow server + remote storage
-    # mlflow.set_tracking_uri("file://" + str(Path("mlruns").absolute()))
+    mlflow.set_tracking_uri(mlflow_tracking_uri)
     mlflow.set_experiment(experiment_name)
 
-    # sklearn autolog 会自动记录 estimator 参数、常见分类指标和模型
-    # 兼容版本需注意官方说明
+    client = MlflowClient(tracking_uri=mlflow_tracking_uri)
+    ensure_registered_model(client, registered_model_name)
+
+    # autolog 可保留，帮你记录 sklearn 参数和部分模型信息
     mlflow.sklearn.autolog(log_input_examples=True, log_model_signatures=True)
+
     # ---------- Load data ----------
     df = pd.read_csv(data_path)
     X = df[FEATURE_COLUMNS]
@@ -60,15 +96,19 @@ def main() -> None:
         stratify=y,
     )
 
-    with mlflow.start_run(run_name="logistic_regression_baseline"):
-        # 手动补充一些更贴近作业语义的参数
+    with mlflow.start_run(run_name=run_name) as run:
+        run_id = run.info.run_id
+
+        # ---------- Minimal params ----------
         mlflow.log_param("feature_columns", ",".join(FEATURE_COLUMNS))
         mlflow.log_param("label_column", label_column)
-        mlflow.log_param("train_rows", len(X_train))
-        mlflow.log_param("test_rows", len(X_test))
         mlflow.log_param("dataset_path", data_path)
+        mlflow.log_param("dataset_version", dataset_version)
 
-        # 可选：记录 dataset preview / schema
+        # ---------- Minimal run tag ----------
+        mlflow.set_tag("git_commit", git_commit)
+
+        # ---------- Optional dataset schema artifact ----------
         schema = {
             "columns": [{"name": c, "dtype": str(df[c].dtype)} for c in df.columns]
         }
@@ -94,20 +134,18 @@ def main() -> None:
         f1 = f1_score(y_test, y_pred, zero_division=0)
         roc_auc = roc_auc_score(y_test, y_prob)
 
-        # 手动记录，便于你在 UI 里看得更明确
         mlflow.log_metric("test_accuracy", accuracy)
         mlflow.log_metric("test_precision", precision)
         mlflow.log_metric("test_recall", recall)
         mlflow.log_metric("test_f1", f1)
         mlflow.log_metric("test_roc_auc", roc_auc)
 
-        # ---------- Classification report artifact ----------
+        # ---------- Evaluation artifacts ----------
         report = classification_report(y_test, y_pred, zero_division=0)
         report_path = artifact_output_dir / "classification_report.txt"
         report_path.write_text(report, encoding="utf-8")
         mlflow.log_artifact(str(report_path), artifact_path="evaluation")
 
-        # ---------- Confusion matrix artifact ----------
         fig, ax = plt.subplots(figsize=(5, 4))
         ConfusionMatrixDisplay.from_predictions(y_test, y_pred, ax=ax)
         fig.tight_layout()
@@ -116,41 +154,64 @@ def main() -> None:
         plt.close(fig)
         mlflow.log_artifact(str(cm_path), artifact_path="evaluation")
 
-        # ---------- Save feature order as artifact ----------
         feature_path = artifact_output_dir / "feature_columns.json"
         feature_path.write_text(json.dumps(FEATURE_COLUMNS, indent=2), encoding="utf-8")
         mlflow.log_artifact(str(feature_path), artifact_path="model_metadata")
 
-        # ---------- Also save a plain local copy for your app ----------
-        # 虽然 mlflow 已经记录模型了，但你本地服务直接加载一个固定文件更方便
-        import joblib
+        # ---------- Log + register model ----------
+        mlflow.sklearn.log_model(
+            sk_model=model,
+            artifact_path="model",
+            registered_model_name=registered_model_name,
+            input_example=X_train.head(3),
+        )
 
-        local_model_path = model_output_dir / "fraud_logistic_regression.pkl"
-        local_feature_path = model_output_dir / "feature_columns.pkl"
-        joblib.dump(model, local_model_path)
-        joblib.dump(FEATURE_COLUMNS, local_feature_path)
+        # ---------- Find current registered version ----------
+        versions = client.search_model_versions(f"name = '{registered_model_name}'")
+        current_version = None
+        for mv in versions:
+            if mv.run_id == run_id:
+                current_version = mv.version
+                break
 
-        mlflow.log_artifact(str(local_model_path), artifact_path="local_export")
-        mlflow.log_artifact(str(local_feature_path), artifact_path="local_export")
+        if current_version is None:
+            raise RuntimeError(
+                f"Cannot find registered model version for run_id={run_id}"
+            )
 
-        # ---------- Tags ----------
-        mlflow.set_tag("project", "ai-secure-agent")
-        mlflow.set_tag("model_type", "logistic_regression")
-        mlflow.set_tag("use_case", "ecommerce_risk_detection")
+        # ---------- Minimal model version tags ----------
+        client.set_model_version_tag(
+            name=registered_model_name,
+            version=current_version,
+            key="dataset_version",
+            value=dataset_version,
+        )
+        client.set_model_version_tag(
+            name=registered_model_name,
+            version=current_version,
+            key="test_f1",
+            value=f"{f1:.6f}",
+        )
+
+        # ---------- Alias ----------
+        client.set_registered_model_alias(
+            name=registered_model_name,
+            alias=model_alias,
+            version=current_version,
+        )
 
         print("Training completed.")
+        print(f"Tracking URI: {mlflow_tracking_uri}")
+        print(f"Experiment: {experiment_name}")
+        print(f"Registered model: {registered_model_name}")
+        print(f"Registered version: {current_version}")
+        print(f"Alias '{model_alias}' -> version {current_version}")
         print(f"Accuracy:  {accuracy:.4f}")
         print(f"Precision: {precision:.4f}")
         print(f"Recall:    {recall:.4f}")
         print(f"F1:        {f1:.4f}")
         print(f"ROC AUC:   {roc_auc:.4f}")
-        print(f"Local model saved to: {local_model_path}")
 
 
 if __name__ == "__main__":
-    import matplotlib.pyplot as plt
-    import mlflow
-    import mlflow.sklearn
-    import pandas as pd
-
     main()
