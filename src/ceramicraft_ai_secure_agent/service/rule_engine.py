@@ -45,7 +45,7 @@ def evaluate_rules(features: dict[str, Any]) -> dict[str, Any]:
     """
     result = RuleEvaluationResult(rule_score=0.0, hits=[], reasons=[])
 
-    if features.get("order_count_last_1h") >= 10:
+    if float(features.get("order_count_last_1h", 0)) >= 10:
         result.hits.append("high_order_count_last_1h")
         result.rule_score += 0.3
         result.reasons.append("More than 10 orders in the last hour")
@@ -54,7 +54,7 @@ def evaluate_rules(features: dict[str, Any]) -> dict[str, Any]:
             features.get("order_count_last_1h"),
         )
 
-    if features.get("unique_ip_count") >= 5:
+    if float(features.get("unique_ip_count", 0)) >= 5:
         result.hits.append("multiple_unique_ips")
         result.rule_score += 0.25
         result.reasons.append("Multiple unique IPs associated with the account")
@@ -64,8 +64,8 @@ def evaluate_rules(features: dict[str, Any]) -> dict[str, Any]:
         )
 
     if (
-        features.get("avg_order_amount", 0.0) < 20.0
-        and features.get("order_count_last_24h", 0.0) >= 15
+        float(features.get("avg_order_amount", 0.0)) < 20.0
+        and float(features.get("order_count_last_24h", 0.0)) >= 15
     ):
         result.hits.append("suspicious_order_pattern")
         result.rule_score += 0.2
@@ -78,8 +78,8 @@ def evaluate_rules(features: dict[str, Any]) -> dict[str, Any]:
         )
 
     if (
-        features.get("account_age_days", 0.0) <= 30.0
-        and features.get("order_count_last_1h", 0.0) >= 6
+        float(features.get("account_age_days", 0.0)) <= 30.0
+        and float(features.get("order_count_last_1h", 0.0)) >= 6
     ):
         result.hits.append("new_account_high_activity")
         result.rule_score += 0.15
@@ -92,8 +92,8 @@ def evaluate_rules(features: dict[str, Any]) -> dict[str, Any]:
         )
 
     if (
-        features.get("device_count", 0.0) >= 4.0
-        and features.get("unique_ip_count", 0.0) >= 3.0
+        float(features.get("device_count", 0.0)) >= 4.0
+        and float(features.get("unique_ip_count", 0.0)) >= 3.0
     ):
         result.hits.append("multiple_devices_and_ips")
         result.rule_score += 0.1

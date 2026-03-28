@@ -31,11 +31,11 @@ def extract_features(transaction: dict[str, Any]) -> dict[str, float]:
         Dictionary mapping feature names to numeric values.
     """
     features: dict[str, float] = {
-        "order_count_last_1h": 1.0,
+        "order_count_last_1h": 2.0,
         "order_count_last_24h": 5.0,
-        "unique_ip_count": 2.0,
-        "avg_order_amount": 10.1,
-        "account_age_days": 12.0,
+        "unique_ip_count": 3.0,
+        "avg_order_amount": 1.1,
+        "account_age_days": 2.0,
         "device_count": 1.0,
     }
 

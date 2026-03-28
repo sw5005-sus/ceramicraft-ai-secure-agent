@@ -12,6 +12,7 @@ This is the single entry point used by the API layer.
 
 from __future__ import annotations
 
+import json
 import os
 from typing import Any, cast
 
@@ -111,10 +112,88 @@ def _llm_judge_node(state: _AssessmentState) -> dict[str, Any]:
         )
         return {"recommendation": _build_recommendation(score["risk_level"])}
     _update_trace_with_score(state)
-    prompt = _build_llm_prompt(score)
+    prompt = _build_llm_prompt(state)
     llm = _get_llm()
     response = llm.invoke(prompt)
     return {"recommendation": response.content}
+
+
+class Recommendation:
+    """Class to represent a recommendation from the deserialized content."""
+
+    def __init__(
+        self,
+        recommended_action: str,
+        reason: str,
+        analyst_summary: str,
+        confidence: str,
+    ) -> None:
+        self.recommended_action = recommended_action
+        self.reason = reason
+        self.analyst_summary = analyst_summary
+        self.confidence = confidence
+
+    @classmethod
+    def from_json(cls, json_str: str) -> Recommendation:
+        """Deserialize from a JSON string."""
+        data = json.loads(json_str)
+        return cls(
+            recommended_action=data["recommended_action"],
+            reason=data["reason"],
+            analyst_summary=data["analyst_summary"],
+            confidence=data["confidence"],
+        )
+
+
+class Action:
+    """Base class for actions."""
+
+    def run(self, state: _AssessmentState):
+        raise NotImplementedError("Subclasses should implement this method.")
+
+
+class ManualReviewAction(Action):
+    def run(self, state: _AssessmentState):
+        logger.info("Flagging transaction for manual review.")
+
+
+class BlockAction(Action):
+    def run(self, state: _AssessmentState):
+        logger.info("Blocking transaction.")
+
+
+class WatchlistAction(Action):
+    def run(self, state: _AssessmentState):
+        logger.info("Adding transaction to watchlist.")
+
+
+class AllowAction(Action):
+    def run(self, state: _AssessmentState):
+        logger.info("Allowing transaction to proceed.")
+
+
+action_map = {
+    "manual_review": ManualReviewAction(),
+    "block": BlockAction(),
+    "watchlist": WatchlistAction(),
+    "allow": AllowAction(),
+}
+
+
+def _action_node(state: _AssessmentState):
+    """Node: execute the recommended action (placeholder)."""
+    recommendation = state["recommendation"]
+    if recommendation is None:
+        logger.info("No recommendation provided, defaulting to allow.")
+        action = AllowAction()
+        action.run()
+        return
+    logger.info("Executing action based on recommendation: %s", recommendation)
+    action_key = Recommendation.from_json(recommendation).recommended_action.lower()
+    action = action_map.get(
+        action_key, AllowAction()
+    )  # Default to AllowAction if not found
+    action.run(state)
 
 
 def _update_trace_with_score(state: _AssessmentState) -> None:
@@ -135,16 +214,20 @@ def _update_trace_with_score(state: _AssessmentState) -> None:
     safe_update_current_trace(metadata=trace_metadata)
 
 
-def _build_llm_prompt(score: dict[str, Any]) -> str:
+def _build_llm_prompt(state: _AssessmentState) -> str:
     """Build the recommendation prompt for the LLM."""
+    score = state["score_result"]
     triggered = (
         ", ".join(score["triggered_rules"]) if score["triggered_rules"] else "none"
     )
+    feature_snapshot = state["features"] if state["features"] else "N/A"
     return loaded_prompt.format(
         risk_score=f"{score['risk_score']:.4f}",
         risk_level=score["risk_level"],
         triggered_rules=triggered,
         fraud_probability=f"{score['fraud_probability']:.4f}",
+        previous_status="N/A",  # todo read from redis
+        feature_snapshot=feature_snapshot,
     )
 
 
@@ -158,13 +241,15 @@ _builder.add_node("evaluate_rules", _evaluate_rules_node)
 _builder.add_node("predict", _predict_node)
 _builder.add_node("compute_score", _compute_score_node)
 _builder.add_node("llm_judge", _llm_judge_node)
+_builder.add_node("execute_action", _action_node)
 
 _builder.set_entry_point("extract_features")
 _builder.add_edge("extract_features", "evaluate_rules")
 _builder.add_edge("extract_features", "predict")
 _builder.add_edge("predict", "compute_score")
 _builder.add_edge("compute_score", "llm_judge")
-_builder.add_edge("llm_judge", END)
+_builder.add_edge("llm_judge", "execute_action")
+_builder.add_edge("execute_action", END)
 
 _graph = _builder.compile()
 

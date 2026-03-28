@@ -1,5 +1,5 @@
 import os
-from typing import Any, Callable, cast
+from typing import Any
 
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
 
@@ -25,19 +25,6 @@ PROMPT_VERSION = os.environ.get(
     "v1",
 )
 LLM_MODEL_NAME = os.environ.get("OPENAI_MODEL_NAME", "gpt-4o-mini")
-
-
-def trace(
-    *args: Any, **kwargs: Any
-) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-    """Return mlflow.trace decorator if available, else no-op."""
-
-    def _decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-        if mlflow is None or not hasattr(mlflow, "trace"):
-            return func
-        return cast(Callable[..., Any], mlflow.trace(*args, **kwargs)(func))
-
-    return _decorator
 
 
 def safe_update_current_trace(metadata: dict[str, Any] | None = None) -> None:

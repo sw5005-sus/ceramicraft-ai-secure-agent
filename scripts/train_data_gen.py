@@ -123,9 +123,9 @@ def generate_fraud_sample() -> Sample:
 
 def assign_label_with_noise(sample: Sample) -> int:
     """
-    Do not directly use the original labels from the generation functions, 
+    Do not directly use the original labels from the generation functions,
     but instead re-label based on the risk score + noise.
-    This makes it more like the real world and 
+    This makes it more like the real world and
     avoids the model simply replicating the rules mechanically.
     """
     risk_score = 0.0
