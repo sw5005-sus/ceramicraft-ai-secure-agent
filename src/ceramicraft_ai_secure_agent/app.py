@@ -2,23 +2,12 @@
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
-
 from fastapi import FastAPI
 
 from ceramicraft_ai_secure_agent.api.risk_api import router as risk_router
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
-from ceramicraft_ai_secure_agent.utils.mlflow_trace import init_mlflow_tracing
 
 logger = get_logger(__name__)
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    init_mlflow_tracing()
-    yield
-    print("Application is shutting down.")
-
 
 app = FastAPI(
     title="AI Secure Agent – Fraud Risk API",

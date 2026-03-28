@@ -14,12 +14,16 @@ dependencies = [
     "pydantic>=2.6.0", #
     "scikit-learn>=1.4.0", # 用于异常检测模型
     "langgraph>=0.0.10", # Module 3: 核心 Agent 框架
-    "langchain-openai>=0.1.0", # 默认 LLM 集成
+    "langgraph-checkpoint>=3.0.0",
+    "langchain-openai>=0.1.0",
     "joblib",
     "boto3",
+    "protobuf>=5.29.6",
     "mlflow[extras,scikit-learn]>=3,<4",
     "setuptools<82",
     "langchain>=1.2.13",
+    "gunicorn>=22.0.0",
+    "pyOpenSSL>=26.0.0",
 ]
 
 [dependency-groups]

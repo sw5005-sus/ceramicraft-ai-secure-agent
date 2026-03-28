@@ -10,95 +10,90 @@ class TestEvaluateRules:
 
     def _make_features(
         self,
-        amount: float = 100.0,
-        is_high_risk_country: float = 0.0,
-        is_high_risk_category: float = 0.0,
-        is_large_amount: float = 0.0,
+        order_count_last_1h: float = 0.0,
+        order_count_last_24h: float = 0.0,
+        unique_ip_count: float = 0.0,
+        avg_order_amount: float = 0.0,
+        account_age_days: float = 0.0,
+        device_count: float = 0.0,
     ) -> dict:
-        import math
 
         return {
-            "amount": amount,
-            "is_high_risk_country": is_high_risk_country,
-            "is_high_risk_category": is_high_risk_category,
-            "amount_log": math.log1p(amount),
-            "is_large_amount": is_large_amount,
+            "order_count_last_1h": order_count_last_1h,
+            "order_count_last_24h": order_count_last_24h,
+            "unique_ip_count": unique_ip_count,
+            "avg_order_amount": avg_order_amount,
+            "account_age_days": account_age_days,
+            "device_count": device_count,
         }
 
     # ------------------------------------------------------------------
     # No rules should trigger for a clean, low-value domestic transaction
     # ------------------------------------------------------------------
     def test_no_rules_triggered_for_clean_transaction(self):
-        features = self._make_features(amount=100.0)
+        features = self._make_features(avg_order_amount=100.0)
         result = evaluate_rules(features)
 
-        assert result["rule_risk"] is False
-        assert result["triggered_rules"] == []
+        assert result["rule_score"] == 0.0
+        assert result["hits"] == []
 
     # ------------------------------------------------------------------
-    # large_amount rule
+    # high_order_count_last_1h rule
     # ------------------------------------------------------------------
-    def test_large_amount_rule_triggers(self):
-        features = self._make_features(amount=6000.0, is_large_amount=1.0)
+    def test_high_order_count_last_1h_rule_triggers(self):
+        features = self._make_features(order_count_last_1h=12)
         result = evaluate_rules(features)
 
-        assert result["rule_risk"] is True
-        assert "large_amount" in result["triggered_rules"]
+        assert result["rule_score"] > 0
+        assert "high_order_count_last_1h" in result["hits"]
 
     # ------------------------------------------------------------------
-    # high_risk_country rule
+    # multiple_unique_ips rule
     # ------------------------------------------------------------------
-    def test_high_risk_country_rule_triggers(self):
-        features = self._make_features(amount=200.0, is_high_risk_country=1.0)
+    def test_multiple_unique_ips_rule_triggers(self):
+        features = self._make_features(unique_ip_count=10)
         result = evaluate_rules(features)
 
-        assert result["rule_risk"] is True
-        assert "high_risk_country" in result["triggered_rules"]
+        assert result["rule_score"] > 0
+        assert "multiple_unique_ips" in result["hits"]
 
     # ------------------------------------------------------------------
-    # high_risk_category rule
+    # suspicious_order_pattern rule
     # ------------------------------------------------------------------
-    def test_high_risk_category_rule_triggers(self):
-        features = self._make_features(amount=300.0, is_high_risk_category=1.0)
+    def test_suspicious_order_pattern_rule_triggers(self):
+        features = self._make_features(avg_order_amount=10.0, order_count_last_24h=20.0)
         result = evaluate_rules(features)
 
-        assert result["rule_risk"] is True
-        assert "high_risk_category" in result["triggered_rules"]
+        assert result["rule_score"] > 0
+        assert "suspicious_order_pattern" in result["hits"]
 
     # ------------------------------------------------------------------
-    # Combined rule: large amount AND high-risk country
+    # account_age_days rule
     # ------------------------------------------------------------------
-    def test_combined_rule_triggers_with_large_amount_and_high_risk_country(self):
+    def test_account_age_days_rule_country(self):
         features = self._make_features(
-            amount=10000.0,
-            is_high_risk_country=1.0,
-            is_large_amount=1.0,
+            account_age_days=10.0,
+            order_count_last_1h=6.0,
         )
         result = evaluate_rules(features)
 
-        assert result["rule_risk"] is True
-        assert "large_amount" in result["triggered_rules"]
-        assert "high_risk_country" in result["triggered_rules"]
-        assert "large_amount_in_high_risk_country" in result["triggered_rules"]
+        assert result["rule_score"] > 0
+        assert "new_account_high_activity" in result["hits"]
 
     # ------------------------------------------------------------------
     # Multiple independent rules can all trigger
     # ------------------------------------------------------------------
     def test_multiple_rules_can_trigger_simultaneously(self):
         features = self._make_features(
-            amount=8000.0,
-            is_high_risk_country=1.0,
-            is_high_risk_category=1.0,
-            is_large_amount=1.0,
+            device_count=5,
+            unique_ip_count=10,
         )
         result = evaluate_rules(features)
 
-        assert result["rule_risk"] is True
-        triggered = result["triggered_rules"]
-        assert "large_amount" in triggered
-        assert "high_risk_country" in triggered
-        assert "high_risk_category" in triggered
-        assert "large_amount_in_high_risk_country" in triggered
+        assert result["rule_score"] > 0
+        triggered = result["hits"]
+        assert "multiple_devices_and_ips" in triggered
+        assert "multiple_unique_ips" in triggered
 
     # ------------------------------------------------------------------
     # Result always contains the expected keys
@@ -107,7 +102,9 @@ class TestEvaluateRules:
         features = self._make_features()
         result = evaluate_rules(features)
 
-        assert "triggered_rules" in result
-        assert "rule_risk" in result
-        assert isinstance(result["triggered_rules"], list)
-        assert isinstance(result["rule_risk"], bool)
+        assert "hits" in result
+        assert "rule_score" in result
+        assert "reasons" in result
+        assert isinstance(result["hits"], list)
+        assert isinstance(result["rule_score"], float)
+        assert isinstance(result["reasons"], list)

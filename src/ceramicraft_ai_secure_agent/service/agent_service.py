@@ -14,9 +14,9 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, cast
+from collections.abc import Callable
+from typing import Any, TypeVar, cast
 
-import mlflow
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 from typing_extensions import TypedDict
@@ -33,18 +33,111 @@ from ceramicraft_ai_secure_agent.utils.mlflow_trace import (
     safe_update_current_trace,
 )
 
-# ---------------------------------------------------------------------------
-# MLflow and prompt setup
-# ---------------------------------------------------------------------------
-
-mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
-mlflow.set_experiment("ai-secure-agent-llm-traces")
-mlflow.langchain.autolog()
-
-PROMPT_URI = "prompts:/fraud_recommendation_prompt@production"
-loaded_prompt = mlflow.genai.load_prompt(PROMPT_URI)
-
 logger = get_logger(__name__)
+
+# ---------------------------------------------------------------------------
+# Lazy globals
+# ---------------------------------------------------------------------------
+
+_PROMPT_URI = "prompts:/fraud_recommendation_prompt@production"
+
+_mlflow_initialized = False
+_loaded_prompt: Any | None = None
+_graph: Any | None = None
+_llm: ChatOpenAI | None = None
+
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+# ---------------------------------------------------------------------------
+# MLflow helpers (lazy / optional)
+# ---------------------------------------------------------------------------
+
+
+def _mlflow_enabled() -> bool:
+    """Whether MLflow tracing/integration is enabled.
+
+    Default is disabled so tests/CI do not hang on import or require external
+    MLflow services unless explicitly opted in.
+    """
+    return os.environ.get("ENABLE_MLFLOW_TRACING", "false").lower() == "true"
+
+
+def _init_mlflow_once() -> None:
+    """Initialise MLflow lazily and only once."""
+    global _mlflow_initialized
+
+    if _mlflow_initialized or not _mlflow_enabled():
+        return
+
+    import mlflow
+
+    mlflow.set_tracking_uri(
+        os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5000")
+    )
+    mlflow.set_experiment("ai-secure-agent-llm-traces")
+    mlflow.langchain.autolog()
+    _mlflow_initialized = True
+
+
+def _trace(name: str):
+    """Lazy MLflow trace decorator.
+
+    When tracing is disabled, this becomes a no-op decorator so module import
+    stays side-effect free in tests and CI.
+    """
+
+    def decorator(func: F) -> F:
+        if not _mlflow_enabled():
+            return func
+
+        import mlflow
+
+        return mlflow.trace(name=name)(func)  # type: ignore[return-value]
+
+    return decorator
+
+
+def _safe_update_trace(metadata: dict[str, Any]) -> None:
+    """Update current trace metadata only when MLflow tracing is enabled."""
+    if not _mlflow_enabled():
+        return
+
+    _init_mlflow_once()
+    safe_update_current_trace(metadata=metadata)
+
+
+def _get_loaded_prompt() -> Any:
+    """Return the loaded prompt template lazily.
+
+    If MLflow is disabled, use a local fallback template string so tests can run
+    without external dependencies.
+    """
+    global _loaded_prompt
+
+    if _loaded_prompt is not None:
+        return _loaded_prompt
+
+    if not _mlflow_enabled():
+        _loaded_prompt = (
+            "You are a fraud risk assessment expert.\n\n"
+            "Based on the following automated risk analysis, return JSON with keys:\n"
+            "recommended_action, reason, analyst_summary, confidence.\n\n"
+            "Risk Score: {risk_score}\n"
+            "Risk Level: {risk_level}\n"
+            "Triggered Rules: {triggered_rules}\n"
+            "Fraud Probability: {fraud_probability}\n"
+            "Previous Status: {previous_status}\n"
+            "Feature Snapshot: {feature_snapshot}\n"
+        )
+        return _loaded_prompt
+
+    _init_mlflow_once()
+
+    import mlflow
+
+    _loaded_prompt = mlflow.genai.load_prompt(_PROMPT_URI)
+    return _loaded_prompt
 
 
 # ---------------------------------------------------------------------------
@@ -91,12 +184,11 @@ def _predict_node(state: _AssessmentState) -> dict[str, Any]:
 
 def _compute_score_node(state: _AssessmentState) -> dict[str, Any]:
     """Node: combine rule and ML signals into a composite risk score."""
-    # state already unpacked at upstream node, use directly
     score_result = risk_scoring.compute_score(state["rule_result"], state["ml_result"])
     return {"score_result": score_result}
 
 
-@mlflow.trace(name="llm_judge_node")
+@_trace(name="llm_judge_node")
 def _llm_judge_node(state: _AssessmentState) -> dict[str, Any]:
     """Node: use an OpenAI LLM to produce a risk judgment and recommendation.
 
@@ -111,6 +203,7 @@ def _llm_judge_node(state: _AssessmentState) -> dict[str, Any]:
             "OPENAI_API_KEY not set – using rule-based recommendation fallback."
         )
         return {"recommendation": _build_recommendation(score["risk_level"])}
+
     _update_trace_with_score(state)
     prompt = _build_llm_prompt(state)
     llm = _get_llm()
@@ -136,39 +229,54 @@ class Recommendation:
     @classmethod
     def from_json(cls, json_str: str) -> Recommendation:
         """Deserialize from a JSON string."""
-        data = json.loads(json_str)
-        return cls(
-            recommended_action=data["recommended_action"],
-            reason=data["reason"],
-            analyst_summary=data["analyst_summary"],
-            confidence=data["confidence"],
-        )
+        if not json_str:
+            logger.error("Empty recommendation string received from LLM.")
+            return fallback_return
+        try:
+            data = json.loads(json_str)
+            return cls(
+                recommended_action=data["recommended_action"],
+                reason=data["reason"],
+                analyst_summary=data["analyst_summary"],
+                confidence=data["confidence"],
+            )
+        except (json.JSONDecodeError, KeyError, TypeError):
+            logger.error("Failed to decode JSON recommendation: %s", json_str)
+            return fallback_return
+
+
+fallback_return = Recommendation(
+    recommended_action="manual_review",
+    reason="LLM unavailable",
+    analyst_summary="LLM API key not set. Defaulting to manual review.",
+    confidence="low",
+)
 
 
 class Action:
     """Base class for actions."""
 
-    def run(self, state: _AssessmentState):
+    def run(self, state: _AssessmentState) -> None:
         raise NotImplementedError("Subclasses should implement this method.")
 
 
 class ManualReviewAction(Action):
-    def run(self, state: _AssessmentState):
+    def run(self, state: _AssessmentState) -> None:
         logger.info("Flagging transaction for manual review.")
 
 
 class BlockAction(Action):
-    def run(self, state: _AssessmentState):
+    def run(self, state: _AssessmentState) -> None:
         logger.info("Blocking transaction.")
 
 
 class WatchlistAction(Action):
-    def run(self, state: _AssessmentState):
+    def run(self, state: _AssessmentState) -> None:
         logger.info("Adding transaction to watchlist.")
 
 
 class AllowAction(Action):
-    def run(self, state: _AssessmentState):
+    def run(self, state: _AssessmentState) -> None:
         logger.info("Allowing transaction to proceed.")
 
 
@@ -180,23 +288,18 @@ action_map = {
 }
 
 
-def _action_node(state: _AssessmentState):
+def _action_node(state: _AssessmentState) -> dict[str, Any]:
     """Node: execute the recommended action (placeholder)."""
     recommendation = state["recommendation"]
-    if recommendation is None:
-        logger.info("No recommendation provided, defaulting to allow.")
-        action = AllowAction()
-        action.run()
-        return
     logger.info("Executing action based on recommendation: %s", recommendation)
     action_key = Recommendation.from_json(recommendation).recommended_action.lower()
-    action = action_map.get(
-        action_key, AllowAction()
-    )  # Default to AllowAction if not found
+    action = action_map.get(action_key, AllowAction())
     action.run(state)
+    return {}
 
 
 def _update_trace_with_score(state: _AssessmentState) -> None:
+    """Attach score metadata to the current trace if tracing is enabled."""
     transaction = state["transaction"]
     score = state["score_result"]
 
@@ -211,7 +314,7 @@ def _update_trace_with_score(state: _AssessmentState) -> None:
         "llm_model": LLM_MODEL_NAME,
         "fallback_used": not bool(os.environ.get("OPENAI_API_KEY", "")),
     }
-    safe_update_current_trace(metadata=trace_metadata)
+    _safe_update_trace(trace_metadata)
 
 
 def _build_llm_prompt(state: _AssessmentState) -> str:
@@ -221,7 +324,9 @@ def _build_llm_prompt(state: _AssessmentState) -> str:
         ", ".join(score["triggered_rules"]) if score["triggered_rules"] else "none"
     )
     feature_snapshot = state["features"] if state["features"] else "N/A"
-    return loaded_prompt.format(
+
+    prompt_template = _get_loaded_prompt()
+    return prompt_template.format(
         risk_score=f"{score['risk_score']:.4f}",
         risk_level=score["risk_level"],
         triggered_rules=triggered,
@@ -232,29 +337,35 @@ def _build_llm_prompt(state: _AssessmentState) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Build and compile the LangGraph workflow (module-level singleton)
+# Lazy graph / llm singletons
 # ---------------------------------------------------------------------------
 
-_builder: StateGraph = StateGraph(cast(Any, _AssessmentState))
-_builder.add_node("extract_features", _extract_features_node)
-_builder.add_node("evaluate_rules", _evaluate_rules_node)
-_builder.add_node("predict", _predict_node)
-_builder.add_node("compute_score", _compute_score_node)
-_builder.add_node("llm_judge", _llm_judge_node)
-_builder.add_node("execute_action", _action_node)
 
-_builder.set_entry_point("extract_features")
-_builder.add_edge("extract_features", "evaluate_rules")
-_builder.add_edge("extract_features", "predict")
-_builder.add_edge("predict", "compute_score")
-_builder.add_edge("compute_score", "llm_judge")
-_builder.add_edge("llm_judge", "execute_action")
-_builder.add_edge("execute_action", END)
+def _get_graph():
+    """Build and compile the LangGraph workflow lazily."""
+    global _graph
 
-_graph = _builder.compile()
+    if _graph is not None:
+        return _graph
 
-# Lazy LLM singleton – initialised only when an API key is available
-_llm: ChatOpenAI | None = None
+    builder: StateGraph = StateGraph(cast(Any, _AssessmentState))
+    builder.add_node("extract_features", _extract_features_node)
+    builder.add_node("evaluate_rules", _evaluate_rules_node)
+    builder.add_node("predict", _predict_node)
+    builder.add_node("compute_score", _compute_score_node)
+    builder.add_node("llm_judge", _llm_judge_node)
+    builder.add_node("execute_action", _action_node)
+
+    builder.set_entry_point("extract_features")
+    builder.add_edge("extract_features", "evaluate_rules")
+    builder.add_edge("extract_features", "predict")
+    builder.add_edge("predict", "compute_score")
+    builder.add_edge("compute_score", "llm_judge")
+    builder.add_edge("llm_judge", "execute_action")
+    builder.add_edge("execute_action", END)
+
+    _graph = builder.compile()
+    return _graph
 
 
 def _get_llm() -> ChatOpenAI:
@@ -270,7 +381,7 @@ def _get_llm() -> ChatOpenAI:
 # ---------------------------------------------------------------------------
 
 
-@mlflow.trace(name="assess_risk")
+@_trace(name="assess_risk")
 def assess_risk(transaction: dict[str, Any]) -> dict[str, Any]:
     """Run the complete risk-assessment pipeline for a transaction.
 
@@ -295,8 +406,9 @@ def assess_risk(transaction: dict[str, Any]) -> dict[str, Any]:
     """
     txn_id: str = str(transaction.get("transaction_id", "unknown"))
     logger.info("Starting risk assessment for transaction: %s", txn_id)
-    safe_update_current_trace(
-        metadata={
+
+    _safe_update_trace(
+        {
             "transaction_id": txn_id,
             "service": "ai-secure-agent",
             "workflow": "risk_assessment_graph",
@@ -305,6 +417,7 @@ def assess_risk(transaction: dict[str, Any]) -> dict[str, Any]:
             "llm_model": LLM_MODEL_NAME,
         }
     )
+
     initial_state: _AssessmentState = {
         "transaction": transaction,
         "features": {},
@@ -314,7 +427,7 @@ def assess_risk(transaction: dict[str, Any]) -> dict[str, Any]:
         "recommendation": "",
     }
 
-    final_state = cast(_AssessmentState, _graph.invoke(initial_state))
+    final_state = cast(_AssessmentState, _get_graph().invoke(initial_state))
     score = final_state["score_result"]
 
     assessment: dict[str, Any] = {
@@ -325,7 +438,6 @@ def assess_risk(transaction: dict[str, Any]) -> dict[str, Any]:
         "fraud_probability": score["fraud_probability"],
         "recommendation": final_state["recommendation"],
     }
-
     logger.info(
         "Risk assessment complete for %s: level=%s score=%.4f",
         txn_id,
