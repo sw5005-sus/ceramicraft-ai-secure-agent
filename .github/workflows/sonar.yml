@@ -26,8 +26,14 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          uv run pytest --cov=src/ceramicraft_ai_secure_agent --cov-report=xml --cov-config=pyproject.toml
-
+          export PYTHONPATH=$(pwd)/src
+          uv run pytest \
+            --cov=src \
+            --cov-report=xml:coverage.xml \
+            --cov-config=pyproject.toml 
+      - name: Debug coverage file
+        run: |
+          cat coverage.xml | head -n 20   
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@1a6d90ebcb0e6a6b1d87e37ba693fe453195ae25
         env:
@@ -39,6 +45,7 @@ jobs:
             -Dsonar.organization=sw5005-sus
             -Dsonar.python.coverage.reportPaths=coverage.xml
             -Dsonar.sources=src
+            -Dsonar.verbose=true
 
       - name: SonarCloud Quality Gate check
         uses: sonarsource/sonarqube-quality-gate-action@master

@@ -36,7 +36,6 @@ jobs:
         run: |
           mkdir -p sarif-reports
           snyk test -d --file=requirements.txt --severity-threshold=high --sarif-file-output=sarif-reports/snyk-aisecure-agent-mservice.sarif || true
-
       - name: Upload Snyk SARIF file
         uses: github/codeql-action/upload-sarif@v3
         with:

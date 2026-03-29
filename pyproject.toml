@@ -76,7 +76,8 @@ build-backend = "hatchling.build"
 testpaths = ["tests"]
 
 [tool.coverage.run]
-source = ["src/ceramicraft_ai_secure_agent"]
+source = ["src"]
+relative_files = true
 omit = [
     "tests/**/*",
     ".github/**/*"
