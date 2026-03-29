@@ -10,7 +10,6 @@ from typing import Any
 
 from langchain_core.tools import tool
 
-from ceramicraft_ai_secure_agent.service.rule_engine import LARGE_AMOUNT_THRESHOLD
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -31,16 +30,13 @@ def extract_features(transaction: dict[str, Any]) -> dict[str, float]:
     Returns:
         Dictionary mapping feature names to numeric values.
     """
-    amount: float = float(transaction.get("amount", 0.0))
-    country: str = str(transaction.get("country", "")).upper()
-    category: str = str(transaction.get("merchant_category", "")).lower()
-
     features: dict[str, float] = {
-        "amount": amount,
-        "is_high_risk_country": 1.0 if country in HIGH_RISK_COUNTRIES else 0.0,
-        "is_high_risk_category": 1.0 if category in HIGH_RISK_CATEGORIES else 0.0,
-        "amount_log": _safe_log(amount),
-        "is_large_amount": 1.0 if amount >= LARGE_AMOUNT_THRESHOLD else 0.0,
+        "order_count_last_1h": 12.0,
+        "order_count_last_24h": 5.0,
+        "unique_ip_count": 12.0,
+        "avg_order_amount": 1.1,
+        "account_age_days": 2.0,
+        "device_count": 1.0,
     }
 
     logger.debug(

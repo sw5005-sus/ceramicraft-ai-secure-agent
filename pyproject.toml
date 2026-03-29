@@ -9,18 +9,26 @@ authors = [
 ]
 # 核心运行依赖：涵盖了 Module 2 (Security) 和 Module 3 (Agentic AI)
 dependencies = [
-    "fastapi>=0.110.0",         # 
-    "uvicorn[standard]>=0.29.0", # 
-    "pydantic>=2.6.0",          # 
-    "scikit-learn>=1.4.0",      # 用于异常检测模型 
-    "langgraph>=0.0.10",        # Module 3: 核心 Agent 框架 
-    "langchain-openai>=0.1.0",  # 默认 LLM 集成
-    "guardrails-ai>=0.4.0",     # Module 2: AI 安全防护栏 
-    "shap>=0.44.0",             # Module 1: 用于 Explainable AI (XAI) 
+    "fastapi>=0.110.0", #
+    "uvicorn[standard]>=0.29.0", #
+    "pydantic>=2.6.0", #
+    "scikit-learn>=1.4.0", # 用于异常检测模型
+    "langgraph>=0.0.10", # Module 3: 核心 Agent 框架
+    "langgraph-checkpoint>=3.0.0",
+    "langchain-openai>=0.1.0",
+    "joblib",
+    "boto3",
+    "protobuf>=5.29.6",
+    "mlflow[scikit-learn]>=3,<4",
+    "setuptools<82",
+    "langchain>=1.2.13",
+    "gunicorn>=22.0.0",
+    "pyOpenSSL>=26.0.0",
+    "requests>=2.33.0",
 ]
 
 [dependency-groups]
-# 开发与测试依赖：对应 Module 4 (Deployment/Testing)
+# 开发与测试依赖
 dev = [
     "pytest>=8.1.0",            # [cite: 10, 8]
     "pytest-cov>=6.0.0",        # 单测覆盖率计算
@@ -28,6 +36,19 @@ dev = [
     "ruff>=0.3.0",              # 代码规范与安全静态检查
     "bandit>=1.7.0",            # 专门针对 Python 的安全扫描工具 
     "ty>=0.0.22",
+    "numpy<2.0",
+]  
+# 模型训练环境
+train = [
+    "pandas",
+    "matplotlib",
+    "mlflow",
+    "numpy<2.0"
+]
+
+optional = [
+    "guardrails-ai>=0.4.0",     # Module 2: AI 安全防护栏 
+    "shap>=0.44.0",             # Module 1: 用于 Explainable AI (XAI) 
 ]
 
 [tool.uv]
@@ -51,8 +72,17 @@ build-backend = "hatchling.build"
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101"]  # 在测试目录中允许使用 assert
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [tool.coverage.run]
+source = ["src"]
+relative_files = true
 omit = [
     "tests/**/*",
     ".github/**/*"
 ]
+branch = true
+
+[tool.coverage.report]
+show_missing = true

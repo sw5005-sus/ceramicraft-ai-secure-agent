@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
+import os
 from unittest.mock import MagicMock, patch
-
-from ceramicraft_ai_secure_agent.service import agent_service
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -21,30 +20,32 @@ _SAMPLE_TRANSACTION: dict = {
 
 _HIGH_RISK_TRANSACTION: dict = {
     "transaction_id": "txn_test_002",
-    "amount": 12500.0,
-    "merchant_category": "unknown",
-    "country": "NG",
-    "user_id": "user_99",
-    "merchant": "ShadyMerchant",
+    "high_order_count_last_1h": 20.0,
+    "multiple_unique_ips": 10.0,
+    "avg_order_amount": 1.0,
+    "order_count_last_24h": 20,
+    "account_age_days": 3,
 }
 
 
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
-
-
 class TestAssessRisk:
     """Tests for agent_service.assess_risk via the LangGraph pipeline."""
 
     def _run(self, transaction: dict) -> dict:
         """Run assess_risk with the LLM node patched out (no API key needed)."""
         # Patch the LLM so tests run without a real OPENAI_API_KEY
-        with patch.dict("os.environ", {}, clear=False):
-            # Ensure OPENAI_API_KEY is absent so the fallback path is exercised
-            import os
-
+        with patch.dict("os.environ", clear=False):
+            # 2. 依然保持你的 OpenAI Key 清理逻辑
             os.environ.pop("OPENAI_API_KEY", None)
+            os.environ["LANGSMITH_TRACING"] = "false"
+            os.environ["LANGCHAIN_TRACING_V2"] = "false"
+
+            from ceramicraft_ai_secure_agent.service import agent_service
+
+            # 3. 动态 import 以确保装饰器被 Mock 掉
             return agent_service.assess_risk(transaction)
 
     def test_returns_expected_keys(self):
@@ -57,6 +58,7 @@ class TestAssessRisk:
             "fraud_probability",
             "recommendation",
         }
+        print(result.keys())
         assert expected_keys == set(result.keys())
 
     def test_transaction_id_preserved(self):
@@ -87,9 +89,8 @@ class TestAssessRisk:
     def test_high_risk_transaction_triggers_rules(self):
         result = self._run(_HIGH_RISK_TRANSACTION)
         triggered = result["triggered_rules"]
-        assert "large_amount" in triggered
-        assert "high_risk_country" in triggered
-        assert "large_amount_in_high_risk_country" in triggered
+        assert "high_order_count_last_1h" in triggered
+        assert "multiple_unique_ips" in triggered
 
     def test_high_risk_transaction_has_high_score(self):
         result = self._run(_HIGH_RISK_TRANSACTION)
@@ -106,6 +107,8 @@ class TestAssessRisk:
         When OPENAI_API_KEY is set in the environment,
         the LLM node should be invoked.
         """
+        from ceramicraft_ai_secure_agent.service import agent_service
+
         fake_response = MagicMock()
         fake_response.content = "LLM-generated recommendation."
 

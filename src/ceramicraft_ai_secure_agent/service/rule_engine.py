@@ -18,6 +18,20 @@ logger = get_logger(__name__)
 LARGE_AMOUNT_THRESHOLD: float = 5_000.0
 
 
+class RuleEvaluationResult:
+    def __init__(self, rule_score: float, hits: list[str], reasons: list[str]):
+        self.rule_score = rule_score
+        self.hits = hits
+        self.reasons = reasons
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "rule_score": self.rule_score,
+            "hits": self.hits,
+            "reasons": self.reasons,
+        }
+
+
 def evaluate_rules(features: dict[str, Any]) -> dict[str, Any]:
     """Apply all business rules to the given feature set.
 
@@ -29,29 +43,71 @@ def evaluate_rules(features: dict[str, Any]) -> dict[str, Any]:
           - ``triggered_rules`` (list[str]): names of rules that fired.
           - ``rule_risk`` (bool): ``True`` if *any* rule triggered.
     """
-    triggered: list[str] = []
+    result = RuleEvaluationResult(rule_score=0.0, hits=[], reasons=[])
 
-    if features.get("is_large_amount"):
-        triggered.append("large_amount")
+    if float(features.get("order_count_last_1h", 0)) >= 10:
+        result.hits.append("high_order_count_last_1h")
+        result.rule_score += 0.3
+        result.reasons.append("More than 10 orders in the last hour")
+        logger.debug(
+            "Rule triggered: high_order_count_last_1h (order_count_last_1h=%s)",
+            features.get("order_count_last_1h"),
+        )
 
-    if features.get("is_high_risk_country"):
-        triggered.append("high_risk_country")
+    if float(features.get("unique_ip_count", 0)) >= 5:
+        result.hits.append("multiple_unique_ips")
+        result.rule_score += 0.25
+        result.reasons.append("Multiple unique IPs associated with the account")
+        logger.debug(
+            "Rule triggered: multiple_unique_ips (unique_ip_count=%s)",
+            features.get("unique_ip_count"),
+        )
 
-    if features.get("is_high_risk_category"):
-        triggered.append("high_risk_category")
+    if (
+        float(features.get("avg_order_amount", 0.0)) < 20.0
+        and float(features.get("order_count_last_24h", 0.0)) >= 15
+    ):
+        result.hits.append("suspicious_order_pattern")
+        result.rule_score += 0.2
+        result.reasons.append("Many low-value orders in the last 24 hours")
+        logger.debug(
+            "Rule triggered: suspicious_order_pattern "
+            "(avg_order_amount=%s, order_count_last_24h=%s)",
+            features.get("avg_order_amount"),
+            features.get("order_count_last_24h"),
+        )
 
-    # Combined rule: large amount AND high-risk country is an immediate flag
-    if features.get("is_large_amount") and features.get("is_high_risk_country"):
-        triggered.append("large_amount_in_high_risk_country")
+    if (
+        float(features.get("account_age_days", 0.0)) <= 30.0
+        and float(features.get("order_count_last_1h", 0.0)) >= 6
+    ):
+        result.hits.append("new_account_high_activity")
+        result.rule_score += 0.15
+        result.reasons.append("New account with high order activity in the last hour")
+        logger.debug(
+            "Rule triggered: new_account_high_activity "
+            "(account_age_days=%s, order_count_last_1h=%s)",
+            features.get("account_age_days"),
+            features.get("order_count_last_1h"),
+        )
 
-    rule_risk = len(triggered) > 0
+    if (
+        float(features.get("device_count", 0.0)) >= 4.0
+        and float(features.get("unique_ip_count", 0.0)) >= 3.0
+    ):
+        result.hits.append("multiple_devices_and_ips")
+        result.rule_score += 0.1
+        result.reasons.append("Multiple devices and IPs associated with the account")
+        logger.debug(
+            "Rule triggered: multiple_devices_and_ips "
+            "(device_count=%s, unique_ip_count=%s)",
+            features.get("device_count"),
+            features.get("unique_ip_count"),
+        )
 
-    logger.info("Rule evaluation complete. Triggered rules: %s", triggered)
-
-    return {
-        "triggered_rules": triggered,
-        "rule_risk": rule_risk,
-    }
+    if result.rule_score > 1.0:
+        result.rule_score = 1.0
+    return result.to_dict()
 
 
 @tool

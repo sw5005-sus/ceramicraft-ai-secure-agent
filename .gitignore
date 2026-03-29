@@ -208,3 +208,13 @@ __marimo__/
 
 # vs-code
 .vscode/
+
+# mlflow
+mlruns/
+artifacts/
+data/
+mlartifacts/
+
+# OS generated files
+.DS_Store
+**/.DS_Store
