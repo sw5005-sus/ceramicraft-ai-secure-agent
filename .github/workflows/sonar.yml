@@ -33,6 +33,12 @@ jobs:
         env:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.projectKey=sw5005-sus_ceramicraft-ai-secure-agent
+            -Dsonar.organization=sw5005-sus
+            -Dsonar.python.coverage.reportPaths=coverage.xml
+            -Dsonar.sources=src
 
       - name: SonarCloud Quality Gate check
         uses: sonarsource/sonarqube-quality-gate-action@master

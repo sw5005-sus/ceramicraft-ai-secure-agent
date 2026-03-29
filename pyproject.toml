@@ -19,11 +19,12 @@ dependencies = [
     "joblib",
     "boto3",
     "protobuf>=5.29.6",
-    "mlflow[extras,scikit-learn]>=3,<4",
+    "mlflow[scikit-learn]>=3,<4",
     "setuptools<82",
     "langchain>=1.2.13",
     "gunicorn>=22.0.0",
     "pyOpenSSL>=26.0.0",
+    "requests>=2.33.0",
 ]
 
 [dependency-groups]
@@ -71,8 +72,16 @@ build-backend = "hatchling.build"
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101"]  # 在测试目录中允许使用 assert
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [tool.coverage.run]
+source = ["src/ceramicraft_ai_secure_agent"]
 omit = [
     "tests/**/*",
     ".github/**/*"
 ]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
