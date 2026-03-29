@@ -208,6 +208,9 @@ def _llm_judge_node(state: _AssessmentState) -> dict[str, Any]:
     prompt = _build_llm_prompt(state)
     llm = _get_llm()
     response = llm.invoke(prompt)
+    print(
+        "LLM Response:\n", response.content
+    )  # Debug log to inspect the raw LLM response
     return {"recommendation": response.content}
 
 

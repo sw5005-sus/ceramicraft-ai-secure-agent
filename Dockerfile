@@ -1,50 +1,48 @@
-# --- 第一阶段：构建环境 ---
-    FROM python:3.12-slim-bookworm AS builder
+# syntax=docker/dockerfile:1.7
 
-    # 安装 uv
-    COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-    
-    # 设置工作目录
-    WORKDIR /app
-    
-    # 1. 缓存依赖安装（利用 Docker 层缓存）
-    # 只有 pyproject.toml 或 uv.lock 变化时，才会重新下载依赖
-    COPY pyproject.toml uv.lock README.md ./
-    RUN --mount=type=cache,target=/root/.cache/uv \
-        uv sync --frozen --no-install-project --no-dev
-    
-    # 2. 拷贝源码并正式安装项目
-    COPY src/ ./src/
-    RUN --mount=type=cache,target=/root/.cache/uv \
-        uv sync --frozen --no-dev
-    
-    
-    # --- 第二阶段：运行环境 ---
-    FROM python:3.12-slim-bookworm
-    
-    # 设置环境变量
-    ENV PYTHONDONTWRITEBYTECODE=1 \
-        PYTHONUNBUFFERED=1 \
-        PATH="/app/.venv/bin:$PATH" \
-        HOST=0.0.0.0 \
-        PORT=8000
-    
-    WORKDIR /app
-    
-    # 1. 安全加固：创建非 root 用户
-    RUN groupadd -r appgroup && useradd -r -g appgroup -s /sbin/nologin appuser
-    
-    # 2. 从构建阶段拷贝编译好的虚拟环境和源码
-    # 这样最终镜像里不会包含 uv 工具，体积更小
-    COPY --from=builder /app /app
+FROM python:3.12-slim AS builder
 
-    RUN chmod -R 555 /app && chown -R appuser:appgroup /app
-    
-    # 3. 切换到非 root 用户
-    USER appuser
-    
-    # 暴露端口
-    EXPOSE 8000
-    
-    # 启动命令：使用模块化方式启动 AI Secure Agent
-    CMD ["python", "-m", "ceramicraft_ai_secure_agent.app"]
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    UV_LINK_MODE=copy
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir uv
+
+COPY pyproject.toml uv.lock README.md ./
+COPY src ./src
+
+RUN uv sync --locked --no-dev --no-editable \
+ && rm -rf /root/.cache /tmp/* \
+ && find /app/.venv -type d -name "__pycache__" -prune -exec rm -rf {} + \
+ && find /app/.venv -type f -name "*.pyc" -delete \
+ && find /app/.venv -type f -name "*.pyo" -delete
+
+FROM python:3.12-slim AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/app/.venv/bin:$PATH" \
+    PYTHONPATH="/app/src"
+
+WORKDIR /app
+
+RUN groupadd --system --gid 10001 appuser \
+ && useradd --system --uid 10001 --gid 10001 --create-home appuser
+
+COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
+COPY --from=builder --chown=appuser:appuser /app/src /app/src
+COPY --from=builder --chown=appuser:appuser /app/README.md /app/README.md
+COPY --from=builder --chown=appuser:appuser /app/pyproject.toml /app/pyproject.toml
+
+USER appuser
+
+EXPOSE 8080
+
+CMD ["uvicorn", "ceramicraft_ai_secure_agent.app:app", "--host", "0.0.0.0", "--port", "8080"]
