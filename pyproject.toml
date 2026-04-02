@@ -9,11 +9,10 @@ authors = [
 ]
 # 核心运行依赖：涵盖了 Module 2 (Security) 和 Module 3 (Agentic AI)
 dependencies = [
-    "fastapi>=0.110.0", #
-    "uvicorn[standard]>=0.29.0", #
-    "pydantic>=2.6.0", #
-    "scikit-learn>=1.4.0", # 用于异常检测模型
-    "langgraph>=0.0.10", # Module 3: 核心 Agent 框架
+    "fastapi>=0.110.0",
+    "uvicorn",
+    "pydantic>=2.6.0",
+    "langgraph>=0.0.10",
     "langgraph-checkpoint>=3.0.0",
     "langchain-openai>=0.1.0",
     "joblib",
@@ -25,6 +24,8 @@ dependencies = [
     "gunicorn>=22.0.0",
     "pyOpenSSL>=26.0.0",
     "requests>=2.33.0",
+    "confluent-kafka>=2.3.0",
+    "redis>=7.4.0",
 ]
 
 [dependency-groups]
@@ -34,7 +35,7 @@ dev = [
     "pytest-cov>=6.0.0",        # 单测覆盖率计算
     "httpx>=0.27.0",            # 
     "ruff>=0.3.0",              # 代码规范与安全静态检查
-    "bandit>=1.7.0",            # 专门针对 Python 的安全扫描工具 
+    "bandit>=1.7.0",            # 专门针对 Python 的安全扫描工具
     "ty>=0.0.22",
     "numpy<2.0",
 ]  
