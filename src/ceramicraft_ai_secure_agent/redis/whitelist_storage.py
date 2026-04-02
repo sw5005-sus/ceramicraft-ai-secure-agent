@@ -1,14 +1,10 @@
 from ceramicraft_ai_secure_agent.redis import redis_client
-from ceramicraft_ai_secure_agent.utils.logger import get_logger
-
-logger = get_logger(__name__)
 
 
 def add_blacklist(user_id: int) -> None:
     """Add a user ID to the blacklist."""
     try:
         redis_client.sadd("blacklist", user_id)
-        logger.info(f"Added user {user_id} to blacklist")
     except Exception as e:
         print(f"Failed to add user {user_id} to blacklist: {e}")
 

@@ -25,11 +25,6 @@ async def lifespan(app: FastAPI):
     try:
         load_config("config/config.yaml")
         logger.info("config loaded successfully")
-        # import for initialization
-        import ceramicraft_ai_secure_agent.redis
-
-        logger.info("redis client initialized successfully")
-
         task = asyncio.create_task(create_consumer())
         logger.info("start to create kafka consumer task")
         yield

@@ -20,17 +20,32 @@ from typing import Any, TypeVar, cast
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 from typing_extensions import TypedDict
+from datetime import datetime
 
 from ceramicraft_ai_secure_agent.service import risk_scoring
 from ceramicraft_ai_secure_agent.service.feature_service import extract_features_tool
 from ceramicraft_ai_secure_agent.service.ml_model import predict_tool
+from ceramicraft_ai_secure_agent.utils.mlflow_trace import (
+    mlflow_enabled,
+    init_mlflow_once,
+    trace,
+    safe_update_trace,
+)
 from ceramicraft_ai_secure_agent.service.rule_engine import evaluate_rules_tool
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
+from ceramicraft_ai_secure_agent.mysql.risk_user_review_storage import (
+    create_risk_user_review,
+    RiskUserReview,
+)
+from ceramicraft_ai_secure_agent.redis import (
+    blacklist_storage,
+    watchlist_storage,
+    whitelist_storage,
+)
 from ceramicraft_ai_secure_agent.utils.mlflow_trace import (
     LLM_MODEL_NAME,
     PROMPT_NAME,
     PROMPT_VERSION,
-    safe_update_current_trace,
 )
 
 logger = get_logger(__name__)
@@ -41,7 +56,6 @@ logger = get_logger(__name__)
 
 _PROMPT_URI = "prompts:/fraud_recommendation_prompt@production"
 
-_mlflow_initialized = False
 _loaded_prompt: Any | None = None
 _graph: Any | None = None
 _llm: ChatOpenAI | None = None
@@ -52,59 +66,6 @@ F = TypeVar("F", bound=Callable[..., Any])
 # ---------------------------------------------------------------------------
 # MLflow helpers (lazy / optional)
 # ---------------------------------------------------------------------------
-
-
-def _mlflow_enabled() -> bool:
-    """Whether MLflow tracing/integration is enabled.
-
-    Default is disabled so tests/CI do not hang on import or require external
-    MLflow services unless explicitly opted in.
-    """
-    return os.environ.get("ENABLE_MLFLOW_TRACING", "false").lower() == "true"
-
-
-def _init_mlflow_once() -> None:
-    """Initialise MLflow lazily and only once."""
-    global _mlflow_initialized
-
-    if _mlflow_initialized or not _mlflow_enabled():
-        return
-
-    import mlflow
-
-    mlflow.set_tracking_uri(
-        os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5000")
-    )
-    mlflow.set_experiment("ai-secure-agent-llm-traces")
-    mlflow.langchain.autolog()
-    _mlflow_initialized = True
-
-
-def _trace(name: str):
-    """Lazy MLflow trace decorator.
-
-    When tracing is disabled, this becomes a no-op decorator so module import
-    stays side-effect free in tests and CI.
-    """
-
-    def decorator(func: F) -> F:
-        if not _mlflow_enabled():
-            return func
-
-        import mlflow
-
-        return mlflow.trace(name=name)(func)  # type: ignore[return-value]
-
-    return decorator
-
-
-def _safe_update_trace(metadata: dict[str, Any]) -> None:
-    """Update current trace metadata only when MLflow tracing is enabled."""
-    if not _mlflow_enabled():
-        return
-
-    _init_mlflow_once()
-    safe_update_current_trace(metadata=metadata)
 
 
 def _get_loaded_prompt() -> Any:
@@ -118,7 +79,7 @@ def _get_loaded_prompt() -> Any:
     if _loaded_prompt is not None:
         return _loaded_prompt
 
-    if not _mlflow_enabled():
+    if not mlflow_enabled():
         _loaded_prompt = (
             "You are a fraud risk assessment expert.\n\n"
             "Based on the following automated risk analysis, return JSON with keys:\n"
@@ -132,7 +93,7 @@ def _get_loaded_prompt() -> Any:
         )
         return _loaded_prompt
 
-    _init_mlflow_once()
+    init_mlflow_once()
 
     import mlflow
 
@@ -148,7 +109,7 @@ def _get_loaded_prompt() -> Any:
 class _AssessmentState(TypedDict):
     """Mutable state passed between LangGraph nodes."""
 
-    transaction: dict[str, Any]
+    user_id: int
     features: dict[str, float]
     rule_result: dict[str, Any]
     ml_result: dict[str, Any]
@@ -162,8 +123,8 @@ class _AssessmentState(TypedDict):
 
 
 def _extract_features_node(state: _AssessmentState) -> dict[str, Any]:
-    """Node: extract features from the raw transaction."""
-    tool_input = cast(Any, {"transaction": state["transaction"]})
+    """Node: extract features from the raw input."""
+    tool_input = cast(Any, {"user_id": state["user_id"]})
     res = extract_features_tool.invoke(tool_input)
     return {"features": res}
 
@@ -188,7 +149,7 @@ def _compute_score_node(state: _AssessmentState) -> dict[str, Any]:
     return {"score_result": score_result}
 
 
-@_trace(name="llm_judge_node")
+@trace(name="llm_judge_node")
 def _llm_judge_node(state: _AssessmentState) -> dict[str, Any]:
     """Node: use an OpenAI LLM to produce a risk judgment and recommendation.
 
@@ -262,22 +223,33 @@ class Action:
 
 class ManualReviewAction(Action):
     def run(self, state: _AssessmentState) -> None:
-        logger.info("Flagging transaction for manual review.")
+        user_id = state["user_id"]
+        recommendation = Recommendation.from_json(state["recommendation"])
+        create_risk_user_review(
+            RiskUserReview(
+                user_id=user_id,
+                confidence=recommendation.confidence,
+                create_time=int(datetime.now().timestamp()),
+                anlyst_summary=recommendation.analyst_summary,
+            )
+        )
 
 
 class BlockAction(Action):
     def run(self, state: _AssessmentState) -> None:
-        logger.info("Blocking transaction.")
+        user_id = state["user_id"]
+        blacklist_storage.add_blacklist(user_id=user_id)
 
 
 class WatchlistAction(Action):
     def run(self, state: _AssessmentState) -> None:
-        logger.info("Adding transaction to watchlist.")
+        user_id = state["user_id"]
+        watchlist_storage.add_watechlist(user_id=user_id)
 
 
 class AllowAction(Action):
     def run(self, state: _AssessmentState) -> None:
-        logger.info("Allowing transaction to proceed.")
+        pass
 
 
 action_map = {
@@ -314,7 +286,7 @@ def _update_trace_with_score(state: _AssessmentState) -> None:
         "llm_model": LLM_MODEL_NAME,
         "fallback_used": not bool(os.environ.get("OPENAI_API_KEY", "")),
     }
-    _safe_update_trace(trace_metadata)
+    safe_update_trace(trace_metadata)
 
 
 def _build_llm_prompt(state: _AssessmentState) -> str:
@@ -376,13 +348,24 @@ def _get_llm() -> ChatOpenAI:
     return _llm
 
 
+def _so_skip(user_id: int) -> bool:
+    if whitelist_storage.is_whitelist(
+        user_id=user_id
+    ) or blacklist_storage.is_blacklisted(user_id=user_id):
+        logger.info(
+            f"User {user_id} is in whitelist or blacklist. Skipping risk assessment."
+        )
+        return True
+    return False
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
 
-@_trace(name="assess_risk")
-def assess_risk(transaction: dict[str, Any]) -> dict[str, Any]:
+@trace(name="assess_risk")
+def assess_risk(user_id: int) -> dict[str, Any]:
     """Run the complete risk-assessment pipeline for a transaction.
 
     The pipeline is implemented as a LangGraph StateGraph:
@@ -404,12 +387,13 @@ def assess_risk(transaction: dict[str, Any]) -> dict[str, Any]:
           - ``fraud_probability`` (float)
           - ``recommendation`` (str)
     """
-    txn_id: str = str(transaction.get("transaction_id", "unknown"))
-    logger.info("Starting risk assessment for transaction: %s", txn_id)
+    logger.info("Starting risk assessment for user %s", user_id)
+    if _so_skip(user_id=user_id):
+        return {}
 
-    _safe_update_trace(
+    safe_update_trace(
         {
-            "transaction_id": txn_id,
+            "user_id": user_id,
             "service": "ai-secure-agent",
             "workflow": "risk_assessment_graph",
             "prompt_name": PROMPT_NAME,
@@ -419,7 +403,7 @@ def assess_risk(transaction: dict[str, Any]) -> dict[str, Any]:
     )
 
     initial_state: _AssessmentState = {
-        "transaction": transaction,
+        "user_id": user_id,
         "features": {},
         "rule_result": {},
         "ml_result": {},

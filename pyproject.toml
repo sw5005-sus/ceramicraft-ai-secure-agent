@@ -26,6 +26,7 @@ dependencies = [
     "requests>=2.33.0",
     "confluent-kafka>=2.3.0",
     "redis>=7.4.0",
+    "mysql-connector-python>=9.6.0",
 ]
 
 [dependency-groups]
