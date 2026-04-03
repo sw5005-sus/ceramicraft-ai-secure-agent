@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 from collections.abc import Callable
 from typing import Any, TypeVar, cast
 
@@ -26,18 +27,16 @@ from ceramicraft_ai_secure_agent.service import risk_scoring
 from ceramicraft_ai_secure_agent.service.feature_service import extract_features_tool
 from ceramicraft_ai_secure_agent.service.ml_model import predict_tool
 from ceramicraft_ai_secure_agent.utils.mlflow_trace import (
-    mlflow_enabled,
-    init_mlflow_once,
     trace,
     safe_update_trace,
 )
 from ceramicraft_ai_secure_agent.service.rule_engine import evaluate_rules_tool
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
-from ceramicraft_ai_secure_agent.mysql.risk_user_review_storage import (
+from ceramicraft_ai_secure_agent.mysqlcli.risk_user_review_storage import (
     create_risk_user_review,
     RiskUserReview,
 )
-from ceramicraft_ai_secure_agent.redis import (
+from ceramicraft_ai_secure_agent.rediscli import (
     blacklist_storage,
     watchlist_storage,
     whitelist_storage,
@@ -68,38 +67,21 @@ F = TypeVar("F", bound=Callable[..., Any])
 # ---------------------------------------------------------------------------
 
 
-def _get_loaded_prompt() -> Any:
+def _get_loaded_prompt(file_name: str) -> str:
     """Return the loaded prompt template lazily.
 
     If MLflow is disabled, use a local fallback template string so tests can run
     without external dependencies.
     """
-    global _loaded_prompt
+    base_dir = Path(__file__).resolve().parent.parent
+    prompt_path = base_dir / "prompts" / file_name
 
-    if _loaded_prompt is not None:
-        return _loaded_prompt
+    with open(prompt_path, "r", encoding="utf-8") as f:
+        return f.read().strip()
+    return ""
 
-    if not mlflow_enabled():
-        _loaded_prompt = (
-            "You are a fraud risk assessment expert.\n\n"
-            "Based on the following automated risk analysis, return JSON with keys:\n"
-            "recommended_action, reason, analyst_summary, confidence.\n\n"
-            "Risk Score: {risk_score}\n"
-            "Risk Level: {risk_level}\n"
-            "Triggered Rules: {triggered_rules}\n"
-            "Fraud Probability: {fraud_probability}\n"
-            "Previous Status: {previous_status}\n"
-            "Feature Snapshot: {feature_snapshot}\n"
-        )
-        return _loaded_prompt
 
-    init_mlflow_once()
-
-    import mlflow
-
-    _loaded_prompt = mlflow.genai.load_prompt(_PROMPT_URI)
-    return _loaded_prompt
-
+_loaded_prompt = _get_loaded_prompt(f"{PROMPT_NAME}_{PROMPT_VERSION}.txt")
 
 # ---------------------------------------------------------------------------
 # LangGraph state definition
@@ -297,7 +279,7 @@ def _build_llm_prompt(state: _AssessmentState) -> str:
     )
     feature_snapshot = state["features"] if state["features"] else "N/A"
 
-    prompt_template = _get_loaded_prompt()
+    prompt_template = _loaded_prompt
     return prompt_template.format(
         risk_score=f"{score['risk_score']:.4f}",
         risk_level=score["risk_level"],
@@ -380,7 +362,7 @@ def assess_risk(user_id: int) -> dict[str, Any]:
 
     Returns:
         Final risk assessment dict containing:
-          - ``transaction_id`` (str)
+          - ``user_id`` (int)
           - ``risk_score`` (float)
           - ``risk_level`` (str)
           - ``triggered_rules`` (list[str])
@@ -415,7 +397,7 @@ def assess_risk(user_id: int) -> dict[str, Any]:
     score = final_state["score_result"]
 
     assessment: dict[str, Any] = {
-        "transaction_id": txn_id,
+        "user_id": user_id,
         "risk_score": score["risk_score"],
         "risk_level": score["risk_level"],
         "triggered_rules": score["triggered_rules"],
@@ -423,8 +405,8 @@ def assess_risk(user_id: int) -> dict[str, Any]:
         "recommendation": final_state["recommendation"],
     }
     logger.info(
-        "Risk assessment complete for %s: level=%s score=%.4f",
-        txn_id,
+        "Risk assessment complete for User %s: level=%s score=%.4f",
+        user_id,
         score["risk_level"],
         score["risk_score"],
     )

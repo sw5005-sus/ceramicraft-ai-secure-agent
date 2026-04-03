@@ -14,7 +14,7 @@ from langchain_core.tools import tool
 from concurrent.futures import ThreadPoolExecutor
 
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
-from ceramicraft_ai_secure_agent.redis import (
+from ceramicraft_ai_secure_agent.rediscli import (
     user_storage,
     order_storage,
     blacklist_storage,

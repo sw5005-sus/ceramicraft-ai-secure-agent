@@ -1,6 +1,6 @@
-from ceramicraft_ai_secure_agent.data import OrderMessage
+from ceramicraft_ai_secure_agent.data.event_data import OrderMessage
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
-import ceramicraft_ai_secure_agent.redis.order_storage as order_storage
+import ceramicraft_ai_secure_agent.rediscli.order_storage as order_storage
 
 
 logger = get_logger(__name__)

@@ -6,11 +6,9 @@ from typing import Optional
 from fastapi import FastAPI, Request, Header, HTTPException
 import contextlib
 import asyncio
-
-from ceramicraft_ai_secure_agent.api.risk_api import router as risk_router
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
-from ceramicraft_ai_secure_agent.kafka.consumer import create_consumer
-from ceramicraft_ai_secure_agent.config.config import load_config
+from ceramicraft_ai_secure_agent.api.risk_api import router as risk_router
+from ceramicraft_ai_secure_agent.kafka.consumer import consume
 from ceramicraft_ai_secure_agent.service.feature_service import (
     validate_and_update_feature_with_request,
     UserRequest,
@@ -23,9 +21,7 @@ logger = get_logger(__name__)
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
-        load_config("config/config.yaml")
-        logger.info("config loaded successfully")
-        task = asyncio.create_task(create_consumer())
+        task = asyncio.create_task(consume())
         logger.info("start to create kafka consumer task")
         yield
     except Exception as e:

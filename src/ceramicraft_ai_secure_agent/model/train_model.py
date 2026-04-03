@@ -18,15 +18,7 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 from sklearn.model_selection import train_test_split
-
-FEATURE_COLUMNS: list[str] = [
-    "order_count_last_1h",
-    "order_count_last_24h",
-    "unique_ip_count",
-    "avg_order_amount",
-    "account_age_days",
-    "device_count",
-]
+from ceramicraft_ai_secure_agent.data.feature_columns import FEATURE_COLUMNS
 
 
 def ensure_registered_model(client: MlflowClient, model_name: str) -> None:

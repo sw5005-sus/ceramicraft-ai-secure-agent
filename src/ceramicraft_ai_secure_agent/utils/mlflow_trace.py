@@ -1,7 +1,9 @@
 import os
-from typing import Any
+from typing import Any, TypeVar, Callable
 
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
+
+F = TypeVar("F", bound=Callable[..., Any])
 
 try:
     import mlflow
@@ -20,46 +22,29 @@ PROMPT_NAME = os.environ.get(
 )
 PROMPT_VERSION = os.environ.get(
     "FRAUD_RECOMMENDATION_PROMPT_VERSION",
-    "v1",
+    "v2",
 )
 LLM_MODEL_NAME = os.environ.get("OPENAI_MODEL_NAME", "gpt-4o-mini")
 
 
-def mlflow_enabled() -> bool:
-    """Whether MLflow tracing/integration is enabled.
-
-    Default is disabled so tests/CI do not hang on import or require external
-    MLflow services unless explicitly opted in.
-    """
+def _is_tracing_enabled() -> bool:
     return os.environ.get("ENABLE_MLFLOW_TRACING", "false").lower() == "true"
 
 
-def _safe_update_current_trace(metadata: dict[str, Any] | None = None) -> None:
-    """Best-effort update of current MLflow trace metadata."""
-    if mlflow is None or not hasattr(mlflow, "update_current_trace"):
+def init_tracing_context() -> None:
+    global _tracing_initialized
+
+    if _tracing_initialized or not _is_tracing_enabled() or mlflow is None:
         return
 
     try:
-        mlflow.update_current_trace(metadata=metadata or {})
-    except Exception as exc:  # pragma: no cover - tracing must not break business flow
-        logger.warning("Failed to update MLflow trace metadata: %s", exc)
-
-
-def init_mlflow_once() -> None:
-    """Initialise MLflow lazily and only once."""
-    global _mlflow_initialized
-
-    if _mlflow_initialized or not mlflow_enabled():
-        return
-
-    import mlflow
-
-    mlflow.set_tracking_uri(
-        os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5000")
-    )
-    mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
-    mlflow.langchain.autolog()
-    _mlflow_initialized = True
+        mlflow.set_tracking_uri(
+            os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5000")
+        )
+        mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
+        _tracing_initialized = True
+    except Exception as e:
+        logger.error("Failed to initialize lightweight tracing: %s", e)
 
 
 def trace(name: str):
@@ -70,20 +55,24 @@ def trace(name: str):
     """
 
     def decorator(func: F) -> F:
-        if not mlflow_enabled():
+        if not _is_tracing_enabled() or mlflow is None:
             return func
 
-        import mlflow
-
-        return mlflow.trace(name=name)(func)  # type: ignore[return-value]
+        init_tracing_context()
+        return mlflow.trace(name=name)(func)
 
     return decorator
 
 
 def safe_update_trace(metadata: dict[str, Any]) -> None:
     """Update current trace metadata only when MLflow tracing is enabled."""
-    if not mlflow_enabled():
+    if not _is_tracing_enabled():
         return
 
-    init_mlflow_once()
-    _safe_update_current_trace(metadata=metadata)
+    try:
+        active_span = mlflow.tracing.get_current_active_span()
+        if active_span:
+            for key, value in metadata.items():
+                active_span.set_attribute(key, value)
+    except Exception as exc:
+        logger.warning("Trace metadata update skipped: %s", exc)

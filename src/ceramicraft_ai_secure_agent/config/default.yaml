@@ -1,7 +1,0 @@
-redis:
-  host: localhost
-  port: 6379
-
-kafka:
-  bootstrap_servers: localhost:9092
-  group_id: ceramicraft_ai_secure_agent_group

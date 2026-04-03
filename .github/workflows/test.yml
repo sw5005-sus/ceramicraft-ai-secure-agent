@@ -22,7 +22,7 @@ jobs:
         run: uv sync --frozen --no-dev
 
       - name: Run tests
-        run: uv run pytest -vv -s -p no:langsmith
+        run: uv run pytest -v
         env:
           ENABLE_MLFLOW_TRACING: "false"
           LANGSMITH_TRACING: "false"

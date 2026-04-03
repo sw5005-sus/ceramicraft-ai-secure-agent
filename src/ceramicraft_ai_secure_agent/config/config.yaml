@@ -1,0 +1,15 @@
+redis:
+  host: 192.168.31.128
+  port: 6379
+
+kafka:
+  bootstrap_servers: 192.168.31.128:9092
+  group_id: ceramicraft_ai_secure_agent_group
+
+mysql:
+  host: 192.168.31.128
+  port: 3306
+  username: root
+  password: changeit
+  database: admin_db
+  max_connect_size: 5

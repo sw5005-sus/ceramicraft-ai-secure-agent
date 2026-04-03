@@ -1,13 +1,15 @@
-from confluent_kafka import Consumer, KafkaError, KafkaException
+import asyncio
+from aiokafka import AIOKafkaConsumer
 from ceramicraft_ai_secure_agent.kafka import order_handler, user_register_handler
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
-from ceramicraft_ai_secure_agent.config.config import Config
+from ceramicraft_ai_secure_agent.config.config import system_config
+from concurrent.futures import ThreadPoolExecutor
 
 logger = get_logger(__name__)
 
 
 order_created_topic = "order_created"
-user_activated_topic = "user_activated_topic"
+user_activated_topic = "user-activated"
 
 topics = [order_created_topic, user_activated_topic]
 topic2handler = {
@@ -15,46 +17,44 @@ topic2handler = {
     user_activated_topic: user_register_handler,
 }
 
+executor = ThreadPoolExecutor(max_workers=10)
 
-def create_consumer():
+
+async def consume():
     logger.info("kafka consumer ready to consume")
-    conf = {
-        "bootstrap.servers": Config.kafka.bootstrap_servers,
-        "group.id": Config.kafka.group_id,
-        "auto.offset.reset": "earliest",
-        "enable.auto.commit": True,
-    }
-
-    consumer = Consumer(conf)
-    consumer.subscribe(topics)
-
-    print(f"listen on Topic: {topics}...")
+    loop = asyncio.get_running_loop()
+    consumer = AIOKafkaConsumer(
+        *topics,
+        bootstrap_servers=system_config.kafka.bootstrap_servers,
+        group_id=system_config.kafka.group_id,
+        auto_offset_reset="earliest",
+        enable_auto_commit=True,
+    )
+    await consumer.start()
+    logger.info(f"listen on Topic: {topics}...")
 
     try:
-        while True:
-            msg = consumer.poll(timeout=1.0)
+        async for msg in consumer:
+            try:
+                key = msg.key.decode("utf-8") if msg.key else None
+                value = msg.value.decode("utf-8") if msg.value else None
 
-            if msg is None:
-                continue
-
-            if msg.error():
-                if msg.error().code() == KafkaError._PARTITION_EOF:
-                    print(f"End of partition reached {msg.partition()}")
-                else:
-                    raise KafkaException(msg.error())
-            else:
-                key = msg.key().decode("utf-8") if msg.key() else None
-                value = msg.value().decode("utf-8") if msg.value() else None
                 logger.info(
-                    f"Message received: Key={key}, Value={value}, Partition={msg.partition()}, Offset={msg.offset()}"
+                    f"Message received: Key={key}, Topic={msg.topic}, "
+                    f"Partition={msg.partition}, Offset={msg.offset}"
                 )
-                topic = msg.topic()
-                if not topic2handler[topic]:
-                    logger.warning(f"unkonwn topic {topic}, will ignore")
-                    continue
-                topic2handler[msg.topic()].handle(value)
 
-    except KeyboardInterrupt:
-        print("consume interrupted")
+                handler = topic2handler.get(msg.topic)
+                if not handler:
+                    logger.warning(f"Unknown topic {msg.topic}, ignoring")
+                    continue
+
+                await loop.run_in_executor(executor, handler.handle, value)
+
+            except Exception as e:
+                logger.error(f"Error processing message: {e}")
+
+    except Exception as e:
+        logger.error(f"Kafka consumer error: {e}")
     finally:
-        consumer.close()
+        await consumer.stop()

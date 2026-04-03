@@ -1,5 +1,5 @@
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
-from ceramicraft_ai_secure_agent.data import UserActivatedEvent
+from ceramicraft_ai_secure_agent.data.event_data import UserActivatedEvent
 
 logger = get_logger(__name__)
 

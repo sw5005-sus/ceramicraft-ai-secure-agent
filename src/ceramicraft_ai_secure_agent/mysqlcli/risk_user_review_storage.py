@@ -1,4 +1,4 @@
-from ceramicraft_ai_secure_agent.mysql import get_connection
+from ceramicraft_ai_secure_agent.mysqlcli import get_connection
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
 
 logger = get_logger(__name__)
