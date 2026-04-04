@@ -118,8 +118,8 @@ uv run pytest
 ### 6. Model Training
 ```
 uv sync --group train
-uv run --group train python script/train_data_gen.py
-uv run --group train python src/ceramicraft_ai_secure_agent/model/train_model.py
+uv run --group train python scripts/train_data_gen.py
+uv run --group train python scripts/train_model.py
 # open mlflow
 source .venv/bin/activate
 mlflow ui

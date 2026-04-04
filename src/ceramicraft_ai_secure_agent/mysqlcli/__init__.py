@@ -21,7 +21,7 @@ def init_mysql_connection_pool():
         return pool
     except Error as e:
         logger.error(f"Error while connecting to MySQL: {e}")
-        return None
+        raise e
 
 
 connection_pool = init_mysql_connection_pool()

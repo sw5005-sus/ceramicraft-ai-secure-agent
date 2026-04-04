@@ -41,7 +41,7 @@ def get_user_register_time(user_id: int) -> int:
         logger.error(
             f"Failed to retrieve registration time for user {user_id} from Redis: {e}"
         )
-        return 0
+        return -1
 
 
 def update_user_ip(user_id: int, ip_address: str) -> None:
@@ -50,7 +50,7 @@ def update_user_ip(user_id: int, ip_address: str) -> None:
     try:
         redis_client = get_redis_client()
         pipeline = redis_client.pipeline()
-        pipeline.zset(f"u:{user_id}:ip", ip_address, int(datetime.now().timestamp()))
+        pipeline.zadd(f"u:{user_id}:ip", {ip_address: int(datetime.now().timestamp())})
         pipeline.zremrangebyscore(f"u:{user_id}:ip", 0, latest_retain_time)
         result = pipeline.execute()
         logger.info(

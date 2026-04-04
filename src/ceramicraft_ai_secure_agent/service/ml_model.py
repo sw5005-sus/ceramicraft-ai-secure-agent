@@ -21,7 +21,9 @@ logger = get_logger(__name__)
 # Resolve path relative to this file so the service works regardless of the
 # working directory.
 _MODEL_PATH: Path = (
-    Path(__file__).resolve().parent.parent / "model" / "fraud_logistic_regression.pkl"
+    Path(__file__).resolve().parent.parent
+    / "model"
+    / "fraud_logistic_regression.joblib"
 )
 
 _model = None
@@ -68,7 +70,6 @@ def predict(features: dict[str, Any]) -> dict[str, Any]:
         }
     except Exception as e:
         logger.error(f"ML Prediction failed: {str(e)}")
-        # 容错处理：发生异常时返回中立结果，防止整个 Agent 崩溃
         return {"fraud_probability": 0.5, "ml_prediction": 0}
 
 

@@ -44,7 +44,7 @@ jobs:
             -Dsonar.projectKey=sw5005-sus_ceramicraft-ai-secure-agent
             -Dsonar.organization=sw5005-sus
             -Dsonar.python.coverage.reportPaths=coverage.xml
-            -Dsonar.sources=src
+            -Dsonar.sources=src/ceramicraft_ai_secure_agent/service
             -Dsonar.verbose=true
 
       - name: SonarCloud Quality Gate check

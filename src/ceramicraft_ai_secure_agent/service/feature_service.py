@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 from datetime import datetime
+import math
 
 
 from langchain_core.tools import tool
@@ -18,6 +19,7 @@ from ceramicraft_ai_secure_agent.rediscli import (
     user_storage,
     order_storage,
     blacklist_storage,
+    user_last_status_storage,
 )
 
 logger = get_logger(__name__)
@@ -45,7 +47,9 @@ def validate_and_update_feature_with_request(userRequest: UserRequest) -> bool:
                 f"User {userRequest.user_id} is blacklisted. Skipping feature update."
             )
             return False
-        user_storage.update_user_ip(user_id=userRequest.user_id, ip=userRequest.ip)
+        user_storage.update_user_ip(
+            user_id=userRequest.user_id, ip_address=userRequest.ip
+        )
         logger.info(
             f"Updated user {userRequest.user_id} IP with {userRequest.ip} from request."
         )
@@ -84,13 +88,26 @@ def extract_features(user_id: int) -> dict[str, float]:
             "unique_ip_count": executor.submit(
                 user_storage.count_user_ip, user_id=user_id
             ),
-            "avg_order_amount": executor.submit(_get_avg_order_amount, user_id=user_id),
+            "avg_order_amount_global": executor.submit(
+                _get_avg_order_amount, user_id=user_id
+            ),
+            "avg_order_amount_today": executor.submit(
+                _get_avg_order_amount_today, user_id=user_id
+            ),
             "account_age_days": executor.submit(
-                lambda: (
-                    datetime.now().timestamp()
-                    - user_storage.get_user_register_time(user_id=user_id)
+                lambda: math.ceil(
+                    (
+                        datetime.now().timestamp()
+                        - user_storage.get_user_register_time(user_id=user_id)
+                    )
+                    / (24 * 3600)
                 )
-                / (24 * 3600)
+            ),
+            "receive_address_count": executor.submit(
+                order_storage.count_user_receiver_address, user_id=user_id
+            ),
+            "last_status": executor.submit(
+                user_last_status_storage.get_user_last_status, user_id=user_id
             ),
         }
 
@@ -101,21 +118,15 @@ def extract_features(user_id: int) -> dict[str, float]:
 
 
 def _get_avg_order_amount(user_id: int) -> float:
-    order_amount = order_storage.get_total_order_amount(user_id=user_id)
-    order_count = order_storage.get_total_order_count(user_id=user_id)
-    avg_order_amount = order_amount / order_count if order_count > 0 else 0.0
-    return avg_order_amount
+    return order_storage.get_global_avg_order_amount(user_id=user_id) / 100
 
 
-def _safe_log(value: float) -> float:
-    """Return log(value + 1) to avoid log(0)."""
-    import math
-
-    return math.log1p(max(value, 0.0))
+def _get_avg_order_amount_today(user_id: int) -> float:
+    return order_storage.get_today_order_avg_amount(user_id=user_id) / 100
 
 
 @tool
-def extract_features_tool(transaction: dict) -> dict:
+def extract_features_tool(user_id: int) -> dict:
     """Extract a flat feature dictionary from a raw transaction payload.
 
     Args:
@@ -126,4 +137,4 @@ def extract_features_tool(transaction: dict) -> dict:
         Dictionary mapping feature names to numeric values ready for the
         rule engine and ML model.
     """
-    return extract_features(transaction)
+    return extract_features(user_id=user_id)

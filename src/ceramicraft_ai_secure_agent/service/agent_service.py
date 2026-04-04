@@ -40,7 +40,9 @@ from ceramicraft_ai_secure_agent.rediscli import (
     blacklist_storage,
     watchlist_storage,
     whitelist_storage,
+    user_last_status_storage,
 )
+from ceramicraft_ai_secure_agent.data.const import RiskUserReviewStatus
 from ceramicraft_ai_secure_agent.utils.mlflow_trace import (
     LLM_MODEL_NAME,
     PROMPT_NAME,
@@ -113,15 +115,13 @@ def _extract_features_node(state: _AssessmentState) -> dict[str, Any]:
 
 def _evaluate_rules_node(state: _AssessmentState) -> dict[str, Any]:
     """Node: apply business rules to the feature set."""
-    tool_input = cast(Any, {"features": state["features"]})
-    res = evaluate_rules_tool.invoke(tool_input)
+    res = evaluate_rules_tool.invoke({"features": state["features"]})
     return {"rule_result": res}
 
 
 def _predict_node(state: _AssessmentState) -> dict[str, Any]:
     """Node: run the ML model on the feature set."""
-    tool_input = cast(Any, {"features": state["features"]})
-    res = predict_tool.invoke(tool_input)
+    res = predict_tool.invoke({"features": state["features"]})
     return {"ml_result": res}
 
 
@@ -129,6 +129,60 @@ def _compute_score_node(state: _AssessmentState) -> dict[str, Any]:
     """Node: combine rule and ML signals into a composite risk score."""
     score_result = risk_scoring.compute_score(state["rule_result"], state["ml_result"])
     return {"score_result": score_result}
+
+
+def _need_llm(state: _AssessmentState) -> bool:
+    """Determine whether the LLM node needs to run based on the score."""
+    risk_score = state["score_result"].get("risk_score", 0.0)
+    rule_score = state["rule_result"].get("rule_score", 0.0)
+    fraud_probability = state["ml_result"].get("fraud_probability", 0.0)
+    if risk_score < 0.20 and rule_score == 0 and fraud_probability < 0.15:
+        return False
+    if risk_score >= 0.40:
+        return True
+    if abs(rule_score - fraud_probability) >= 0.35:
+        return True
+    return False
+
+
+def _should_block_directly(state: _AssessmentState) -> bool:
+    """Determine whether to block the user directly based on high-risk signals."""
+    features = state["features"]
+    triggered_rules = state["rule_result"]["hits"]
+    fraud_probability = state["ml_result"]["fraud_probability"]
+    risk_score = state["score_result"]["risk_score"]
+    rule_score = state["rule_result"]["rule_score"]
+
+    order_1h = features.get("order_count_last_1h", 0)
+    account_age = features.get("account_age_days", 0)
+    ip_count = features.get("unique_ip_count", 0)
+    addr_count = features.get("receive_address_count", 0)
+
+    # 1. high risk score
+    if risk_score >= 0.85:
+        return True
+
+    # 2. rule + ml both very high
+    if rule_score >= 0.70 and fraud_probability >= 0.80:
+        return True
+
+    # 3. burst order activity + multiple IPs
+    if (
+        "high_order_count_last_1h" in triggered_rules
+        and "multiple_unique_ips" in triggered_rules
+        and order_1h >= 12
+    ):
+        return True
+
+    # 4. new account + high recent activity
+    if account_age <= 7 and order_1h >= 10:
+        return True
+
+    # 5. network/address anomaly
+    if addr_count >= 5 and ip_count >= 4:
+        return True
+
+    return False
 
 
 @trace(name="llm_judge_node")
@@ -139,13 +193,30 @@ def _llm_judge_node(state: _AssessmentState) -> dict[str, Any]:
     set so that the service degrades gracefully in environments without LLM
     access.
     """
-    score = state["score_result"]
+    if _should_block_directly(state):
+        logger.info(
+            "High-risk signals detected. Blocking user %s directly.", state["user_id"]
+        )
+        return {
+            "recommendation": Recommendation(
+                recommended_action="block",
+                reason="High risk score and/or triggered rules",
+                analyst_summary="The transaction exhibits multiple high-risk indicators, "
+                "including a high composite risk score and several triggered rules. "
+                "Blocking is recommended based on these strong signals.",
+                confidence="high",
+            ).to_json()
+        }
+
+    if not _need_llm(state):
+        return {"recommendation": no_risk_recommendation.to_json()}
+
     api_key = os.environ.get("OPENAI_API_KEY", "")
     if not api_key:
         logger.warning(
             "OPENAI_API_KEY not set – using rule-based recommendation fallback."
         )
-        return {"recommendation": _build_recommendation(score["risk_level"])}
+        return {"recommendation": fallback_return.to_json()}
 
     _update_trace_with_score(state)
     prompt = _build_llm_prompt(state)
@@ -187,6 +258,17 @@ class Recommendation:
             logger.error("Failed to decode JSON recommendation: %s", json_str)
             return fallback_return
 
+    def to_json(self) -> str:
+        """Serialize to a JSON string."""
+        return json.dumps(self)
+
+
+no_risk_recommendation = Recommendation(
+    recommended_action="allow",
+    reason="Low risk score and no triggered rules",
+    analyst_summary="The transaction appears legitimate based on the computed risk score and rule evaluation.",
+    confidence="high",
+)
 
 fallback_return = Recommendation(
     recommended_action="manual_review",
@@ -213,6 +295,7 @@ class ManualReviewAction(Action):
                 confidence=recommendation.confidence,
                 create_time=int(datetime.now().timestamp()),
                 anlyst_summary=recommendation.analyst_summary,
+                state=RiskUserReviewStatus.MANUAL_REVIEW.value,
             )
         )
 
@@ -220,13 +303,29 @@ class ManualReviewAction(Action):
 class BlockAction(Action):
     def run(self, state: _AssessmentState) -> None:
         user_id = state["user_id"]
+        recommendation = Recommendation.from_json(state["recommendation"])
         blacklist_storage.add_blacklist(user_id=user_id)
+        create_risk_user_review(
+            user_id=user_id,
+            confidence=recommendation.confidence,
+            create_time=int(datetime.now().timestamp()),
+            anlyst_summary=recommendation.analyst_summary,
+            state=RiskUserReviewStatus.BLOCK.value,
+        )
 
 
 class WatchlistAction(Action):
     def run(self, state: _AssessmentState) -> None:
         user_id = state["user_id"]
+        recommendation = Recommendation.from_json(state["recommendation"])
         watchlist_storage.add_watechlist(user_id=user_id)
+        create_risk_user_review(
+            user_id=user_id,
+            confidence=recommendation.confidence,
+            create_time=int(datetime.now().timestamp()),
+            anlyst_summary=recommendation.analyst_summary,
+            state=RiskUserReviewStatus.WATCHLIST.value,
+        )
 
 
 class AllowAction(Action):
@@ -248,17 +347,18 @@ def _action_node(state: _AssessmentState) -> dict[str, Any]:
     logger.info("Executing action based on recommendation: %s", recommendation)
     action_key = Recommendation.from_json(recommendation).recommended_action.lower()
     action = action_map.get(action_key, AllowAction())
+    userId = state["user_id"]
+    user_last_status_storage.set_user_last_status(userId, action_key)
     action.run(state)
     return {}
 
 
 def _update_trace_with_score(state: _AssessmentState) -> None:
     """Attach score metadata to the current trace if tracing is enabled."""
-    transaction = state["transaction"]
     score = state["score_result"]
 
     trace_metadata: dict[str, Any] = {
-        "transaction_id": transaction.get("transaction_id", "unknown"),
+        "user_id": state["user_id"],
         "risk_level": score["risk_level"],
         "risk_score": score["risk_score"],
         "fraud_probability": score["fraud_probability"],
@@ -330,8 +430,8 @@ def _get_llm() -> ChatOpenAI:
     return _llm
 
 
-def _so_skip(user_id: int) -> bool:
-    if whitelist_storage.is_whitelist(
+def _do_skip(user_id: int) -> bool:
+    if whitelist_storage.is_whitelisted(
         user_id=user_id
     ) or blacklist_storage.is_blacklisted(user_id=user_id):
         logger.info(
@@ -370,7 +470,7 @@ def assess_risk(user_id: int) -> dict[str, Any]:
           - ``recommendation`` (str)
     """
     logger.info("Starting risk assessment for user %s", user_id)
-    if _so_skip(user_id=user_id):
+    if _do_skip(user_id=user_id):
         return {}
 
     safe_update_trace(
@@ -412,13 +512,3 @@ def assess_risk(user_id: int) -> dict[str, Any]:
     )
 
     return assessment
-
-
-def _build_recommendation(risk_level: str) -> str:
-    """Return a rule-based recommendation when the LLM is unavailable."""
-    recommendations: dict[str, str] = {
-        "HIGH": "Block transaction and alert fraud team immediately.",
-        "MEDIUM": "Flag for manual review before processing.",
-        "LOW": "Transaction appears legitimate. Approve.",
-    }
-    return recommendations.get(risk_level, "Insufficient data. Review manually.")

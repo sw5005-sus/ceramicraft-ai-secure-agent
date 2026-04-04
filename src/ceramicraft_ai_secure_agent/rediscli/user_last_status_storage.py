@@ -13,7 +13,7 @@ def set_user_last_status(user_id: int, status: str) -> None:
         logger.error(f"Failed to set last status for user {user_id}: {e}")
 
 
-def get_usre_last_status(user_id: int) -> str:
+def get_user_last_status(user_id: int) -> str:
     """Get the last status for a user ID."""
     try:
         status = get_redis_client().get(f"user:{user_id}:ls")

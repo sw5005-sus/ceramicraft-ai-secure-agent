@@ -13,15 +13,15 @@ from ceramicraft_ai_secure_agent.utils.logger import get_logger
 logger = get_logger(__name__)
 
 # Weight applied to the rule-based signal (0–1)
-RULE_WEIGHT: float = 0.4
+RULE_WEIGHT: float = 0.35
 
 # Weight applied to the ML fraud probability (0–1)
-ML_WEIGHT: float = 0.6
+ML_WEIGHT: float = 0.65
 
 # Thresholds that map a numeric score to a risk level label
 RISK_THRESHOLDS: dict[str, float] = {
-    "HIGH": 0.65,
-    "MEDIUM": 0.35,
+    "HIGH": 0.72,
+    "MEDIUM": 0.42,
     "LOW": 0.0,
 }
 
