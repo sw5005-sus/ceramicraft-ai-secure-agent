@@ -14,7 +14,6 @@ dependencies = [
     "pydantic>=2.6.0",
     "langgraph>=0.0.10",
     "langchain-openai>=0.1.0",
-    "joblib",
     "boto3",
     "langchain>=1.2.13",
     "redis>=7.4.0",

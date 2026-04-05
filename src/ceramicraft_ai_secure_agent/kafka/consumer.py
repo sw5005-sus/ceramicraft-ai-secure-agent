@@ -27,11 +27,10 @@ async def consume():
         *topics,
         bootstrap_servers=system_config.kafka.bootstrap_servers,
         group_id=system_config.kafka.group_id,
-        auto_offset_reset="earliest",
         enable_auto_commit=True,
-        session_timeout_ms=60000,
-        heartbeat_interval_ms=20000,
-        max_poll_interval_ms=60000,
+        session_timeout_ms=30000,
+        heartbeat_interval_ms=10000,
+        max_poll_interval_ms=300000,
     )
     await consumer.start()
     logger.info(f"listen on Topic: {topics}...")

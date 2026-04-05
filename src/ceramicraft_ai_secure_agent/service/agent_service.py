@@ -21,7 +21,7 @@ from typing import Any, TypeVar, cast
 
 from typing_extensions import TypedDict
 from datetime import datetime
-
+from langchain_openai import ChatOpenAI
 from ceramicraft_ai_secure_agent.service import risk_scoring
 from ceramicraft_ai_secure_agent.service.feature_service import extract_features_tool
 from ceramicraft_ai_secure_agent.service.ml_model import predict_tool
@@ -41,7 +41,7 @@ from ceramicraft_ai_secure_agent.rediscli import (
     whitelist_storage,
     user_last_status_storage,
 )
-from ceramicraft_ai_secure_agent.data.const import RiskUserReviewStatus
+from ceramicraft_ai_secure_agent.data.const import RiskUserReviewDecision
 from ceramicraft_ai_secure_agent.utils.mlflow_trace import (
     LLM_MODEL_NAME,
     PROMPT_NAME,
@@ -296,6 +296,29 @@ fallback_return = Recommendation(
 )
 
 
+def _build_risk_user_review_from_state(state: _AssessmentState) -> RiskUserReview:
+    user_id = state["user_id"]
+    recommendation = Recommendation.from_json(state["recommendation"])
+    score = state["score_result"]
+    return RiskUserReview(
+        user_id=user_id,
+        confidence=recommendation.confidence,
+        create_time=int(datetime.now().timestamp()),
+        analyst_summary=recommendation.analyst_summary,
+        decision=RiskUserReviewDecision.from_str(
+            recommendation.recommended_action
+        ).value,
+        risk_score=score.get("risk_score", 0.0),
+        risk_level=score.get("risk_level", ""),
+        rule_score=state["rule_result"].get("rule_score", 0.0),
+        fraud_probability=state["ml_result"].get("fraud_probability", 0.0),
+        triggered_rules=score.get("triggered_rules", []),
+        decision_source=(
+            "LLM" if recommendation.reason != "LLM unavailable" else "SystemRule"
+        ),
+    )
+
+
 class Action:
     """Base class for actions."""
 
@@ -305,49 +328,26 @@ class Action:
 
 class ManualReviewAction(Action):
     def run(self, state: _AssessmentState) -> None:
-        user_id = state["user_id"]
-        recommendation = Recommendation.from_json(state["recommendation"])
-        create_risk_user_review(
-            RiskUserReview(
-                user_id=user_id,
-                confidence=recommendation.confidence,
-                create_time=int(datetime.now().timestamp()),
-                anlyst_summary=recommendation.analyst_summary,
-                state=RiskUserReviewStatus.MANUAL_REVIEW.value,
-            )
-        )
+        create_risk_user_review(_build_risk_user_review_from_state(state=state))
 
 
 class BlockAction(Action):
     def run(self, state: _AssessmentState) -> None:
         user_id = state["user_id"]
-        recommendation = Recommendation.from_json(state["recommendation"])
         blacklist_storage.add_blacklist(user_id=user_id)
-        create_risk_user_review(
-            user_id=user_id,
-            confidence=recommendation.confidence,
-            create_time=int(datetime.now().timestamp()),
-            anlyst_summary=recommendation.analyst_summary,
-            state=RiskUserReviewStatus.BLOCK.value,
-        )
+        create_risk_user_review(_build_risk_user_review_from_state(state=state))
 
 
 class WatchlistAction(Action):
     def run(self, state: _AssessmentState) -> None:
         user_id = state["user_id"]
-        recommendation = Recommendation.from_json(state["recommendation"])
         watchlist_storage.add_watechlist(user_id=user_id)
-        create_risk_user_review(
-            user_id=user_id,
-            confidence=recommendation.confidence,
-            create_time=int(datetime.now().timestamp()),
-            anlyst_summary=recommendation.analyst_summary,
-            state=RiskUserReviewStatus.WATCHLIST.value,
-        )
+        create_risk_user_review(_build_risk_user_review_from_state(state=state))
 
 
 class AllowAction(Action):
     def run(self, state: _AssessmentState) -> None:
+        create_risk_user_review(_build_risk_user_review_from_state(state=state))
         pass
 
 
@@ -452,8 +452,6 @@ def _get_llm() -> ChatOpenAI:
 
     with _llm_lock:
         if _llm is None:
-            from langchain_openai import ChatOpenAI
-
             _llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0)
         return _llm
 

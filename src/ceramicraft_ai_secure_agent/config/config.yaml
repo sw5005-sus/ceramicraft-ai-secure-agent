@@ -1,13 +1,13 @@
 redis:
-  host: 10.249.91.72
+  host: 10.249.171.135
   port: 6379
 
 kafka:
-  bootstrap_servers: 10.249.91.72:9092
+  bootstrap_servers: 10.249.171.135:9092
   group_id: ceramicraft_ai_secure_agent_group
 
 mysql:
-  host: 10.249.91.72
+  host: 10.249.171.135
   port: 3306
   username: root
   password: changeit

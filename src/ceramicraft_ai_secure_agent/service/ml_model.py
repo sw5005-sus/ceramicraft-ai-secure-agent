@@ -9,8 +9,9 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from typing import Any
+import json
+import math
 
-import joblib
 from langchain_core.tools import tool
 
 from ceramicraft_ai_secure_agent.data.feature_columns import FEATURE_COLUMNS
@@ -21,9 +22,7 @@ logger = get_logger(__name__)
 # Resolve path relative to this file so the service works regardless of the
 # working directory.
 _MODEL_PATH: Path = (
-    Path(__file__).resolve().parent.parent
-    / "model"
-    / "fraud_logistic_regression.joblib"
+    Path(__file__).resolve().parent.parent / "model" / "model_weights.json"
 )
 
 _model = None
@@ -36,9 +35,29 @@ def _load_model():
         model_path = Path(os.environ.get("FRAUD_MODEL_PATH", str(_MODEL_PATH)))
         logger.info("Loading fraud model from %s", model_path)
         with open(model_path, "rb") as f:
-            _model = joblib.load(f)  # noqa: S301
+            _model = json.load(f)  # noqa: S301
         logger.info("Fraud model loaded successfully.")
     return _model
+
+
+def _sigmoid(x: float) -> float:
+    if x >= 0:
+        z = math.exp(-x)
+        return 1.0 / (1.0 + z)
+    z = math.exp(x)
+    return z / (1.0 + z)
+
+
+def predict_proba_from_features(features: dict[str, float]) -> float:
+    model = _load_model()
+    cols = model["feature_columns"]
+    coef = model["coef"]
+    intercept = model["intercept"]
+
+    score = intercept
+    for c, w in zip(cols, coef):
+        score += float(features.get(c, 0.0)) * float(w)
+    return _sigmoid(score)
 
 
 def predict(features: dict[str, Any]) -> dict[str, Any]:
@@ -52,25 +71,15 @@ def predict(features: dict[str, Any]) -> dict[str, Any]:
           - ``fraud_probability`` (float): probability in [0, 1].
           - ``ml_prediction`` (int): 1 = fraud, 0 = legitimate.
     """
-    model = _load_model()
     try:
-        feature_vector = [[features.get(col, 0.0) for col in FEATURE_COLUMNS]]
-        fraud_probability: float = float(model.predict_proba(feature_vector)[0][1])
-        ml_prediction: int = int(model.predict(feature_vector)[0])
-
-        logger.info(
-            "ML prediction: label=%d, probability=%.4f",
-            ml_prediction,
-            fraud_probability,
-        )
-
+        prob = predict_proba_from_features(features)
         return {
-            "fraud_probability": fraud_probability,
-            "ml_prediction": ml_prediction,
+            "fraud_probability": prob,
+            "prediction": 1 if prob >= 0.5 else 0,
         }
     except Exception as e:
         logger.error(f"ML Prediction failed: {str(e)}")
-        return {"fraud_probability": 0.5, "ml_prediction": 0}
+        return {"fraud_probability": 0.5, "prediction": 0}
 
 
 @tool

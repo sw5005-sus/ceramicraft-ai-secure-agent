@@ -6,7 +6,7 @@ from aiokafka import AIOKafkaProducer
 
 async def send_kafka_message(topic, file_path):
     producer = AIOKafkaProducer(
-        bootstrap_servers="10.249.91.72:9092",
+        bootstrap_servers="10.249.171.135:9092",
         value_serializer=lambda v: json.dumps(v).encode("utf-8"),
     )
 

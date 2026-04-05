@@ -1,0 +1,35 @@
+{
+    "model_type": "logistic_regression",
+    "feature_columns": [
+        "order_count_last_1h",
+        "order_count_last_24h",
+        "unique_ip_count",
+        "avg_order_amount_global",
+        "avg_order_amount_today",
+        "account_age_days",
+        "receive_address_count"
+    ],
+    "coef": [
+        0.28469650157051435,
+        0.04329984479726711,
+        0.5989676425022291,
+        0.03339606975158231,
+        -0.07163756386082035,
+        -0.005477175840983572,
+        0.3653173517108683
+    ],
+    "intercept": -2.001016217651222,
+    "classes": [
+        0,
+        1
+    ],
+    "positive_class": 1,
+    "threshold": 0.5,
+    "metrics": {
+        "accuracy": 0.9601063829787234,
+        "precision": 0.8453038674033149,
+        "recall": 0.9870967741935484,
+        "f1": 0.9107142857142857,
+        "roc_auc": 0.9947263197708975
+    }
+}
