@@ -11,15 +11,14 @@ This is the single entry point used by the API layer.
 """
 
 from __future__ import annotations
-
+import threading
 import json
 import os
+
 from pathlib import Path
 from collections.abc import Callable
 from typing import Any, TypeVar, cast
 
-from langchain_openai import ChatOpenAI
-from langgraph.graph import END, StateGraph
 from typing_extensions import TypedDict
 from datetime import datetime
 
@@ -55,11 +54,12 @@ logger = get_logger(__name__)
 # Lazy globals
 # ---------------------------------------------------------------------------
 
-_PROMPT_URI = "prompts:/fraud_recommendation_prompt@production"
-
-_loaded_prompt: Any | None = None
+_loaded_prompt: str | None = None
+_prompt_lock = threading.Lock()
 _graph: Any | None = None
-_llm: ChatOpenAI | None = None
+_graph_lock = threading.Lock()
+_llm: Any | None = None
+_llm_lock = threading.Lock()
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -69,21 +69,39 @@ F = TypeVar("F", bound=Callable[..., Any])
 # ---------------------------------------------------------------------------
 
 
-def _get_loaded_prompt(file_name: str) -> str:
+def _get_loaded_prompt() -> str:
     """Return the loaded prompt template lazily.
 
     If MLflow is disabled, use a local fallback template string so tests can run
     without external dependencies.
     """
-    base_dir = Path(__file__).resolve().parent.parent
-    prompt_path = base_dir / "prompts" / file_name
+    global _loaded_prompt
+    if _loaded_prompt is not None:
+        return _loaded_prompt
 
-    with open(prompt_path, "r", encoding="utf-8") as f:
-        return f.read().strip()
-    return ""
+    with _prompt_lock:
+        if _loaded_prompt is None:
+            try:
+                base_dir = Path(__file__).resolve().parent.parent
+                file_name = f"{PROMPT_NAME}_{PROMPT_VERSION}.txt"
+                prompt_path = base_dir / "prompts" / file_name
 
+                if not prompt_path.exists():
+                    logger.warning(
+                        f"Prompt file not found at {prompt_path}. Using fallback."
+                    )
+                    _loaded_prompt = "You are a helpful risk assessment assistant..."  # 你的 fallback
+                else:
+                    with open(prompt_path, "r", encoding="utf-8") as f:
+                        _loaded_prompt = f.read().strip()
 
-_loaded_prompt = _get_loaded_prompt(f"{PROMPT_NAME}_{PROMPT_VERSION}.txt")
+                logger.info("Prompt loaded successfully.")
+            except Exception as e:
+                logger.error(f"Failed to load prompt: {e}")
+                return "Emergency fallback prompt template..."
+
+    return _loaded_prompt
+
 
 # ---------------------------------------------------------------------------
 # LangGraph state definition
@@ -260,7 +278,7 @@ class Recommendation:
 
     def to_json(self) -> str:
         """Serialize to a JSON string."""
-        return json.dumps(self)
+        return json.dumps(self.__dict__)
 
 
 no_risk_recommendation = Recommendation(
@@ -379,7 +397,7 @@ def _build_llm_prompt(state: _AssessmentState) -> str:
     )
     feature_snapshot = state["features"] if state["features"] else "N/A"
 
-    prompt_template = _loaded_prompt
+    prompt_template = _get_loaded_prompt()
     return prompt_template.format(
         risk_score=f"{score['risk_score']:.4f}",
         risk_level=score["risk_level"],
@@ -401,33 +419,43 @@ def _get_graph():
 
     if _graph is not None:
         return _graph
+    with _graph_lock:
+        if _graph is not None:
+            return _graph
+        from langgraph.graph import END, StateGraph
 
-    builder: StateGraph = StateGraph(cast(Any, _AssessmentState))
-    builder.add_node("extract_features", _extract_features_node)
-    builder.add_node("evaluate_rules", _evaluate_rules_node)
-    builder.add_node("predict", _predict_node)
-    builder.add_node("compute_score", _compute_score_node)
-    builder.add_node("llm_judge", _llm_judge_node)
-    builder.add_node("execute_action", _action_node)
+        builder: StateGraph = StateGraph(cast(Any, _AssessmentState))
+        builder.add_node("extract_features", _extract_features_node)
+        builder.add_node("evaluate_rules", _evaluate_rules_node)
+        builder.add_node("predict", _predict_node)
+        builder.add_node("compute_score", _compute_score_node)
+        builder.add_node("llm_judge", _llm_judge_node)
+        builder.add_node("execute_action", _action_node)
 
-    builder.set_entry_point("extract_features")
-    builder.add_edge("extract_features", "evaluate_rules")
-    builder.add_edge("extract_features", "predict")
-    builder.add_edge("predict", "compute_score")
-    builder.add_edge("compute_score", "llm_judge")
-    builder.add_edge("llm_judge", "execute_action")
-    builder.add_edge("execute_action", END)
+        builder.set_entry_point("extract_features")
+        builder.add_edge("extract_features", "evaluate_rules")
+        builder.add_edge("extract_features", "predict")
+        builder.add_edge("predict", "compute_score")
+        builder.add_edge("compute_score", "llm_judge")
+        builder.add_edge("llm_judge", "execute_action")
+        builder.add_edge("execute_action", END)
 
-    _graph = builder.compile()
+        _graph = builder.compile()
     return _graph
 
 
 def _get_llm() -> ChatOpenAI:
     """Return a module-level ChatOpenAI singleton (created on first use)."""
     global _llm
-    if _llm is None:
-        _llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0)
-    return _llm
+    if _llm is not None:
+        return _llm
+
+    with _llm_lock:
+        if _llm is None:
+            from langchain_openai import ChatOpenAI
+
+            _llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0)
+        return _llm
 
 
 def _do_skip(user_id: int) -> bool:

@@ -24,12 +24,6 @@ from ceramicraft_ai_secure_agent.rediscli import (
 
 logger = get_logger(__name__)
 
-# Countries considered high-risk for fraud purposes
-HIGH_RISK_COUNTRIES = {"NG", "RU", "KP", "IR", "SY"}
-
-# Merchant categories considered high-risk
-HIGH_RISK_CATEGORIES = {"unknown", "financial", "gambling"}
-
 
 class UserRequest:
     def __init__(self, user_id: int, ip: str, uri: str, method: str) -> None:
