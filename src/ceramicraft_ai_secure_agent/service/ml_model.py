@@ -6,15 +6,14 @@ Loads the serialised fraud-detection model from disk and exposes a
 
 from __future__ import annotations
 
+import json
+import math
 import os
 from pathlib import Path
 from typing import Any
-import json
-import math
 
 from langchain_core.tools import tool
 
-from ceramicraft_ai_secure_agent.data.feature_columns import FEATURE_COLUMNS
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
 
 logger = get_logger(__name__)

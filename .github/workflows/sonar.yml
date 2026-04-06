@@ -6,6 +6,8 @@ on:
       - main
   pull_request:
     types: [opened, synchronize, reopened]
+  schedule:
+    - cron: '0 0 * * 0' # Run every Sunday at midnight
 
 jobs:
   sonarcloud:

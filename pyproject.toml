@@ -47,18 +47,24 @@ optional = [
 ]
 
 [tool.uv]
-# 确保团队成员使用一致的 Python 版本
 default-groups = ["dev"]
 
 [tool.ruff]
-# 配置代码检查，符合 Responsible AI 的代码整洁要求
 line-length = 88
 target-version = "py312"
 
 [tool.ruff.lint]
-# 将原来的设置移动到这里
 select = ["E", "F", "S", "I"]
 ignore = ["D100"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["ceramicraft_ai_secure_agent"]
+
+[tool.pyright]
+include = ["src"]
+venvPath = "."
+venv = ".venv"
+
 
 [build-system]
 requires = ["hatchling"]

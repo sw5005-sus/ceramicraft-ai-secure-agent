@@ -6,21 +6,19 @@ that can be consumed by the rule engine and the ML model.
 
 from __future__ import annotations
 
-from typing import Any
-from datetime import datetime
 import math
-
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 
 from langchain_core.tools import tool
-from concurrent.futures import ThreadPoolExecutor
 
-from ceramicraft_ai_secure_agent.utils.logger import get_logger
 from ceramicraft_ai_secure_agent.rediscli import (
-    user_storage,
-    order_storage,
     blacklist_storage,
+    order_storage,
     user_last_status_storage,
+    user_storage,
 )
+from ceramicraft_ai_secure_agent.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -33,26 +31,28 @@ class UserRequest:
         self.method = method
 
 
-def validate_and_update_feature_with_request(userRequest: UserRequest) -> bool:
+def validate_and_update_feature_with_request(user_request: UserRequest) -> bool:
     """Validate and update user features based on the incoming request."""
     try:
-        if blacklist_storage.is_blacklisted(user_id=userRequest.user_id):
+        if blacklist_storage.is_blacklisted(user_id=user_request.user_id):
             logger.warning(
-                f"User {userRequest.user_id} is blacklisted. Skipping feature update."
+                f"User {user_request.user_id} is blacklisted. Skipping feature update."
             )
             return False
         user_storage.update_user_ip(
-            user_id=userRequest.user_id, ip_address=userRequest.ip
+            user_id=user_request.user_id, ip_address=user_request.ip
         )
         logger.info(
-            f"Updated user {userRequest.user_id} IP with {userRequest.ip} from request."
+            "Updated user %s IP with %s from request.",
+            user_request.user_id,
+            user_request.ip,
         )
     except Exception as e:
-        logger.error(f"Failed to update user {userRequest.user_id} IP in Redis: {e}")
+        logger.error(f"Failed to update user {user_request.user_id} IP in Redis: {e}")
     return True
 
 
-def extract_features(user_id: int) -> dict[str, float]:
+def extract_features(user_id: int) -> dict[str, int | float | str]:
     """Extract a flat feature dictionary from a raw transaction.
 
     Args:
@@ -61,9 +61,9 @@ def extract_features(user_id: int) -> dict[str, float]:
     Returns:
         Dictionary mapping feature names to numeric values.
     """
-    last_hour = datetime.now().timestamp() - 3600
-    last_day = datetime.now().timestamp() - 24 * 3600
-    now = datetime.now().timestamp()
+    last_hour = int(datetime.now().timestamp() - 3600)
+    last_day = int(datetime.now().timestamp() - 24 * 3600)
+    now = int(datetime.now().timestamp())
 
     with ThreadPoolExecutor() as executor:
         features = {

@@ -1,8 +1,9 @@
+from datetime import datetime
+from typing import cast
+
+from ceramicraft_ai_secure_agent.data.event_data import UserActivatedEvent
 from ceramicraft_ai_secure_agent.rediscli import get_redis_client
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
-from ceramicraft_ai_secure_agent.data.event_data import UserActivatedEvent
-from datetime import datetime
-
 
 logger = get_logger(__name__)
 
@@ -29,9 +30,11 @@ def get_user_register_time(user_id: int) -> int:
     try:
         activated_time = get_redis_client().get(f"u:{user_id}:rt")
         if activated_time is not None:
-            activated_time = int(activated_time)
+            activated_time = int(cast(int, activated_time))
             logger.info(
-                f"User {user_id} registration time retrieved from Redis: {activated_time}"
+                "User %s registration time retrieved from Redis: %s",
+                user_id,
+                activated_time,
             )
             return activated_time
         else:
@@ -54,10 +57,17 @@ def update_user_ip(user_id: int, ip_address: str) -> None:
         pipeline.zremrangebyscore(f"u:{user_id}:ip", 0, latest_retain_time)
         result = pipeline.execute()
         logger.info(
-            f"Stored IP address {ip_address} for user {user_id} in Redis. result: {result}"
+            "Stored IP address %s for user %s in Redis. result: %s",
+            ip_address,
+            user_id,
+            result,
         )
     except Exception as e:
-        logger.error(f"Failed to store IP address for user {user_id} in Redis: {e}")
+        logger.error(
+            "Failed to store IP address for user %s in Redis: %s",
+            user_id,
+            e,
+        )
 
 
 def count_user_ip(user_id: int) -> int:
@@ -70,7 +80,11 @@ def count_user_ip(user_id: int) -> int:
         logger.info(
             f"User {user_id} has used {count} unique IP addresses in the last 24 hours."
         )
-        return count
+        return int(cast(int, count))
     except Exception as e:
-        logger.error(f"Failed to count IP addresses for user {user_id} in Redis: {e}")
+        logger.error(
+            "Failed to count IP addresses for user %s in Redis: %s",
+            user_id,
+            e,
+        )
         return 0

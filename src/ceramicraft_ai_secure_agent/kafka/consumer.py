@@ -1,9 +1,11 @@
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
+
 from aiokafka import AIOKafkaConsumer
+
+from ceramicraft_ai_secure_agent.config.config import system_config
 from ceramicraft_ai_secure_agent.kafka import order_handler, user_register_handler
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
-from ceramicraft_ai_secure_agent.config.config import system_config
-from concurrent.futures import ThreadPoolExecutor
 
 logger = get_logger(__name__)
 

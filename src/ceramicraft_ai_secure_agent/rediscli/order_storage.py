@@ -1,8 +1,9 @@
+from datetime import datetime
+from typing import Any, List, cast
+
+from ceramicraft_ai_secure_agent.data.event_data import OrderMessage
 from ceramicraft_ai_secure_agent.rediscli import get_redis_client
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
-from ceramicraft_ai_secure_agent.data.event_data import OrderMessage
-from datetime import datetime
-
 
 logger = get_logger(__name__)
 
@@ -34,7 +35,8 @@ def create_order(orderMsg: OrderMessage) -> None:
         pipeline.zremrangebyscore(f"u:{user_id}:o", 0, earlest_retain_time)
         result = pipeline.execute()
         logger.info(
-            f"Stored order {order_id} for user {user_id} in Redis with timestamp {timestamp}. result: {result}"
+            f"Stored order {order_id} for user {user_id} "
+            f"in Redis with timestamp {timestamp}. result: {result}"
         )
     except Exception as e:
         logger.error(f"Failed to store order {order_id} in Redis: {e}")
@@ -47,9 +49,13 @@ def count_order_by_time(user_id: int, start_time: int, end_time: int) -> int:
         logger.info(
             f"User {user_id} has {count} orders between {start_time} and {end_time}."
         )
-        return count
+        return int(cast(int, count))
     except Exception as e:
-        logger.error(f"Failed to count orders for user {user_id} in Redis: {e}")
+        logger.error(
+            "Failed to count orders for user %s in Redis: %s",
+            user_id,
+            e,
+        )
         return 0
 
 
@@ -75,7 +81,7 @@ def get_global_avg_order_amount(user_id: int) -> float:
     key = f"u:{user_id}:stat"
     try:
         redis_client = get_redis_client()
-        res = redis_client.hmget(key, ["amount", "count"])
+        res = cast(List[Any], redis_client.hmget(key, ["amount", "count"]))
         total_amount = res[0] if res[0] is not None else 0.0
         total_count = res[1] if res[1] is not None else 0
         if total_count == 0:
@@ -85,7 +91,9 @@ def get_global_avg_order_amount(user_id: int) -> float:
         return avg_amount
     except Exception as e:
         logger.error(
-            f"Failed to get global average order amount for user {user_id} from Redis: {e}"
+            "Failed to get global average order amount for user %s from Redis: %s",
+            user_id,
+            e,
         )
         return 0.0
 
@@ -104,11 +112,16 @@ def update_today_order_amount(orderMsg: OrderMessage) -> None:
         pipe.expireat(key, expireAt)
         result = pipe.execute()
         logger.info(
-            f"Updated today's order amount for user {user_id} by {order_amount}. result: {result}"
+            "Updated today's order amount for user %s by %s. result: %s",
+            user_id,
+            order_amount,
+            result,
         )
     except Exception as e:
         logger.error(
-            f"Failed to update today's order amount for user {user_id} in Redis: {e}"
+            "Failed to update today's order amount for user %s in Redis: %s",
+            user_id,
+            e,
         )
 
 
@@ -118,7 +131,7 @@ def get_today_order_avg_amount(user_id: int) -> float:
     key = f"u:{user_id}:stat:{today}"
     try:
         redis_client = get_redis_client()
-        res = redis_client.hmget(key, ["amount", "count"])
+        res = cast(List[Any], redis_client.hmget(key, ["amount", "count"]))
         total_amount = res[0] if res[0] is not None else 0.0
         total_count = res[1] if res[1] is not None else 0
         if total_count == 0:
@@ -128,7 +141,9 @@ def get_today_order_avg_amount(user_id: int) -> float:
         return avg_amount
     except Exception as e:
         logger.error(
-            f"Failed to get today's average order amount for user {user_id} from Redis: {e}"
+            "Failed to get today's average order amount for user %s from Redis: %s",
+            user_id,
+            e,
         )
         return 0.0
 
@@ -142,7 +157,9 @@ def update_receiver_address(orderMsg: OrderMessage) -> None:
         logger.info(f"Updated receiver address for user {user_id}.")
     except Exception as e:
         logger.error(
-            f"Failed to update receiver address for user {user_id} in Redis: {e}"
+            "Failed to update receiver address for user %s in Redis: %s",
+            user_id,
+            e,
         )
 
 
@@ -151,9 +168,11 @@ def count_user_receiver_address(user_id: int) -> int:
     try:
         count = get_redis_client().scard(f"u:{user_id}:ra")
         logger.info(f"User {user_id} has {count} unique receiver addresses.")
-        return count
+        return int(cast(int, count))
     except Exception as e:
         logger.error(
-            f"Failed to count unique receiver addresses for user {user_id} in Redis: {e}"
+            "Failed to count unique receiver addresses for user %s in Redis: %s",
+            user_id,
+            e,
         )
         return 0

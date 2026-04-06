@@ -1,3 +1,5 @@
+from typing import cast
+
 from ceramicraft_ai_secure_agent.rediscli import get_redis_client
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
 
@@ -18,9 +20,9 @@ def get_user_last_status(user_id: int) -> str:
     try:
         status = get_redis_client().get(f"u:{user_id}:ls")
         if status is not None:
-            status = status.decode("utf-8")
+            status = str(cast(str, status))
         logger.info(f"Got last status for user {user_id}: {status}")
         return status
     except Exception as e:
         logger.error(f"Failed to get last status for user {user_id}: {e}")
-        return None
+        return ""

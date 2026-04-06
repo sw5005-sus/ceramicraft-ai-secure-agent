@@ -47,7 +47,7 @@ def main() -> None:
     max_iter = int(os.environ.get("MAX_ITER", "1000"))
     random_state = int(os.environ.get("RANDOM_STATE", "42"))
 
-    mlflow_uri = os.environ.get("MLFLOW_TRACKING_URI")
+    mlflow_uri = os.environ.get("MLFLOW_TRACKING_URI", "localhost:5000")
     use_mlflow = mlflow_uri is not None
 
     artifact_output_dir = Path("artifacts")
@@ -150,7 +150,7 @@ def main() -> None:
     ConfusionMatrixDisplay.from_predictions(y_test, y_pred, ax=ax)
     plt.title("Confusion Matrix")
     confusion_matrix_path = artifact_output_dir / "confusion_matrix.png"
-    fig.savefig(confusion_matrix_path)
+    fig.savefig(str(confusion_matrix_path))
     plt.close(fig)
 
     # ---------- 7. MLflow tracking ----------
@@ -177,11 +177,13 @@ def main() -> None:
             for k, v in metrics.items():
                 mlflow.log_metric(f"test_{k}", v)
 
+            import mlflow.sklearn as ml_sklearn
+
             # Only upload lightweight artifacts, not sklearn-flavor models.
             mlflow.log_artifact(str(weights_path), artifact_path="model")
             mlflow.log_artifact(str(metadata_path), artifact_path="model")
             mlflow.log_artifact(str(confusion_matrix_path), artifact_path="evaluation")
-            mlflow.sklearn.log_model(
+            ml_sklearn.log_model(
                 sk_model=model,
                 artifact_path="sklearn_model",
                 registered_model_name=os.environ.get(

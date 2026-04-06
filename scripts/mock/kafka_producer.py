@@ -1,6 +1,7 @@
+import argparse
 import asyncio
 import json
-import argparse
+
 from aiokafka import AIOKafkaProducer
 
 

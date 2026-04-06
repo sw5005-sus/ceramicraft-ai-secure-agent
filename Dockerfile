@@ -5,7 +5,8 @@ RUN apk add --no-cache \
     musl-dev \
     python3-dev \
     libffi-dev \
-    zlib-dev \
+    zlib>=1.3.2-r0 \
+    zlib-dev>=1.3.2-r0 \
     curl
     
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
@@ -26,7 +27,11 @@ FROM python:3.12-alpine
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/app/.venv/bin:$PATH"
-    
+
+RUN apk update && apk upgrade --no-cache && \
+    apk add --no-cache zlib>=1.3.2-r0 && \
+    rm -rf /var/cache/apk/*
+
 WORKDIR /app
     
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup

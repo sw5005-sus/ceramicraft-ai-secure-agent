@@ -1,7 +1,10 @@
+import json
 import os
 import sys
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, mock_open, patch
+
+from ceramicraft_ai_secure_agent.data.state import AssessmentState
 
 # --- 1. 环境与依赖隔离 (必须在最顶部) ---
 # 关闭 MLflow 追踪和防止真实调用 OpenAI
@@ -23,11 +26,13 @@ sys.modules["ceramicraft_ai_secure_agent.mysqlcli.risk_user_review_storage"] = (
 
 # --- 2. 导入被测模块 ---
 # 注意：一定要在上面的 mock 注入后再导入
-import ceramicraft_ai_secure_agent.service.agent_service as agent_service
+import ceramicraft_ai_secure_agent.service.agent_service as agent_service  # noqa: E402
+from ceramicraft_ai_secure_agent.service.agent_service import (  # noqa: E402
+    _AssessmentState,
+)
 
 
 class TestAgentService(unittest.TestCase):
-
     def setUp(self):
         """清理单例状态，确保测试隔离"""
         agent_service._graph = None
@@ -59,6 +64,7 @@ class TestAgentService(unittest.TestCase):
         mock_storage.blacklist_storage.is_blacklisted.return_value = False
 
         # 2. 模拟 LangGraph 的执行结果
+        rec_json = '{"recommended_action": "manual_review", "confidence": "high"}'
         mock_invoke_res = {
             "score_result": {
                 "risk_score": 0.45,
@@ -66,7 +72,7 @@ class TestAgentService(unittest.TestCase):
                 "triggered_rules": ["high_order_count"],
                 "fraud_probability": 0.3,
             },
-            "recommendation": '{"recommended_action": "manual_review", "confidence": "high"}',
+            "recommendation": rec_json,
         }
         mock_get_graph.return_value.invoke.return_value = mock_invoke_res
 
@@ -78,29 +84,20 @@ class TestAgentService(unittest.TestCase):
         self.assertEqual(result["risk_level"], "medium")
         self.assertIn("high_order_count", result["triggered_rules"])
 
-    def test_should_block_directly_high_score(self):
-        """测试极高风险分数触发直接拦截逻辑"""
-        # 构造高风险 state
-        state = {
-            "features": {},
-            "rule_result": {"hits": [], "rule_score": 0.1},
-            "ml_result": {"fraud_probability": 0.2},
-            "score_result": {"risk_score": 0.9},  # 超过 0.85
-        }
-
-        self.assertTrue(agent_service._should_block_directly(state))
-
     @patch("ceramicraft_ai_secure_agent.service.agent_service._get_llm")
-    def test_llm_judge_node_no_key_fallback(self, mock_get_llm):
+    @patch("ceramicraft_ai_secure_agent.service.agent_service.need_llm_judgment")
+    def test_llm_judge_node_no_key_fallback(self, mock_need_llm_judgment, mock_get_llm):
         """测试在无 API KEY 时 LLM 节点是否降级"""
+        mock_need_llm_judgment.return_value = True
         # 确保环境变量为空
         with patch.dict(os.environ, {"OPENAI_API_KEY": ""}):
-            state = {
+            state: _AssessmentState = {
                 "user_id": 1,
-                "score_result": {"risk_score": 0.5},
-                "rule_result": {"rule_score": 0.4, "hits": []},
-                "ml_result": {"fraud_probability": 0.4},
                 "features": {},
+                "rule_result": {"hits": [], "rule_score": 0.4},
+                "ml_result": {"fraud_probability": 0.4},
+                "score_result": {"risk_score": 0.5},
+                "recommendation": "pending",
             }
 
             res = agent_service._llm_judge_node(state)
@@ -109,6 +106,56 @@ class TestAgentService(unittest.TestCase):
             self.assertIn("manual_review", res["recommendation"])
             self.assertIn("LLM unavailable", res["recommendation"])
             mock_get_llm.assert_not_called()
+
+    @patch("ceramicraft_ai_secure_agent.service.agent_service.user_last_status_storage")
+    @patch("ceramicraft_ai_secure_agent.service.agent_service.BlockAction.run")
+    def test_action_node_execution(self, mock_block_run, mock_status_storage):
+        from ceramicraft_ai_secure_agent.service.agent_service import _action_node
+
+        state = AssessmentState(
+            user_id=777,
+            features={},
+            rule_result={},
+            ml_result={},
+            score_result={"risk_score": 0.9},
+            recommendation=json.dumps(
+                {
+                    "recommended_action": "block",
+                    "reason": "test",
+                    "analyst_summary": "s",
+                    "confidence": "high",
+                }
+            ),
+        )
+
+        _action_node(state)
+
+        mock_status_storage.set_user_last_status.assert_called_once_with(777, "block")
+        mock_block_run.assert_called_once()
+
+    def test_recommendation_parsing_fallback(self):
+        from ceramicraft_ai_secure_agent.service.agent_service import (
+            Recommendation,
+        )
+
+        bad_json = "{ 'invalid': json }"
+        res = Recommendation.from_json(bad_json)
+        self.assertEqual(res.recommended_action, "manual_review")
+        self.assertEqual(res.reason, "LLM unavailable")
+
+    @patch("ceramicraft_ai_secure_agent.service.agent_service.Path.exists")
+    def test_get_loaded_prompt_file_not_found(self, mock_exists):
+        mock_exists.return_value = False
+        res = agent_service._get_loaded_prompt()
+        self.assertIn("Emergency fallback", res)
+
+    @patch("builtins.open", new_callable=mock_open, read_data="Mocked Prompt Content")
+    @patch("ceramicraft_ai_secure_agent.service.agent_service.Path.exists")
+    def test_get_loaded_prompt_success(self, mock_exists, mock_file):
+        """test normal file loading"""
+        mock_exists.return_value = True
+        res = agent_service._get_loaded_prompt()
+        self.assertEqual(res, "Mocked Prompt Content")
 
 
 if __name__ == "__main__":

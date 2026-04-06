@@ -212,7 +212,7 @@ __marimo__/
 # mlflow
 mlruns/
 artifacts/
-data/
+/data/
 mlartifacts/
 
 # OS generated files

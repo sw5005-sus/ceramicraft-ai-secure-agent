@@ -11,7 +11,6 @@ from typing import Any
 from langchain_core.tools import tool
 
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
-import ceramicraft_ai_secure_agent.rediscli.watchlist_storage as watchlist_storage
 
 logger = get_logger(__name__)
 
@@ -129,7 +128,8 @@ def evaluate_rules(features: dict[str, Any]) -> dict[str, Any]:
         result.hits.append("amount_drop_vs_history")
         result.rule_score += 0.14
         result.reasons.append(
-            "Today's average order amount is significantly lower than historical average"
+            "Today's average order amount is significantly lower than "
+            "historical average"
         )
         logger.debug(
             "Rule triggered: amount_drop_vs_history "
@@ -157,7 +157,7 @@ def evaluate_rules(features: dict[str, Any]) -> dict[str, Any]:
         result.rule_score += 0.18
         result.reasons.append("Account is associated with multiple receiving addresses")
         logger.debug(
-            "Rule triggered: multiple_receive_addresses " "(receive_address_count=%s)",
+            "Rule triggered: multiple_receive_addresses (receive_address_count=%s)",
             receive_address_count,
         )
 
@@ -166,7 +166,8 @@ def evaluate_rules(features: dict[str, Any]) -> dict[str, Any]:
         result.hits.append("ip_address_combination_anomaly")
         result.rule_score += 0.12
         result.reasons.append(
-            "Account is associated with both multiple IPs and multiple receiving addresses"
+            "Account is associated with both multiple IPs "
+            "and multiple receiving addresses"
         )
         logger.debug(
             "Rule triggered: ip_address_combination_anomaly "

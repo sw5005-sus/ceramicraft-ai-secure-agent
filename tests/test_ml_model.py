@@ -11,17 +11,13 @@ import math
 import unittest
 from unittest.mock import mock_open, patch
 
-
 MODULE_UNDER_TEST = "ceramicraft_ai_secure_agent.service.ml_model"
 
 
 class TestMLModel(unittest.TestCase):
     def setUp(self):
         self.ml_model = importlib.import_module(MODULE_UNDER_TEST)
-        self.ml_model._model = None
-
-    def tearDown(self):
-        self.ml_model._model = None
+        setattr(self.ml_model, "_model", None)
 
     def test_load_model_loads_once_and_caches_instance(self):
         fake_model = {
@@ -48,7 +44,7 @@ class TestMLModel(unittest.TestCase):
             "coef": [0.5],
             "intercept": 0.0,
         }
-        custom_path = "/tmp/custom_model_weights.json"
+        custom_path = "mock:/virtual/fraud_model.json"
 
         with (
             patch.dict("os.environ", {"FRAUD_MODEL_PATH": custom_path}, clear=False),
@@ -163,18 +159,19 @@ class TestMLModel(unittest.TestCase):
         )
 
     def test_predict_tool_delegates_to_predict(self):
-        features = {"a": 1}
+        feature_data = {"a": 1}
         expected = {"fraud_probability": 0.77, "prediction": 1}
+        tool_input = {"features": feature_data}
 
         with patch.object(
             self.ml_model,
             "predict",
             return_value=expected,
         ) as mock_predict:
-            result = self.ml_model.predict_tool.func(features)
+            result = self.ml_model.predict_tool.invoke(tool_input)
 
         self.assertEqual(result, expected)
-        mock_predict.assert_called_once_with(features)
+        mock_predict.assert_called_once_with(feature_data)
 
 
 if __name__ == "__main__":

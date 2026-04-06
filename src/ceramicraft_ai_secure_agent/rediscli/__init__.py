@@ -1,4 +1,5 @@
 import redis
+
 from ceramicraft_ai_secure_agent.config.config import system_config
 
 _redis_pool = None

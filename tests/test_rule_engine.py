@@ -9,7 +9,6 @@ import importlib
 import unittest
 from unittest.mock import patch
 
-
 MODULE_UNDER_TEST = "ceramicraft_ai_secure_agent.service.rule_engine"
 
 
@@ -98,15 +97,16 @@ class TestRuleEngine(unittest.TestCase):
         self.assertLessEqual(result["rule_score"], 1.0)
 
     def test_evaluate_rules_tool(self):
-        features = {"order_count_last_1h": 12}
+        feature_data = {"order_count_last_1h": 12}
+        tool_input = {"features": feature_data}
 
         with patch.object(self.rule_engine, "evaluate_rules") as mock_eval:
             mock_eval.return_value = {"rule_score": 0.3, "hits": [], "reasons": []}
 
-            result = self.rule_engine.evaluate_rules_tool.func(features)
+            result = self.rule_engine.evaluate_rules_tool.invoke(tool_input)
 
         self.assertEqual(result["rule_score"], 0.3)
-        mock_eval.assert_called_once_with(features)
+        mock_eval.assert_called_once_with(feature_data)
 
 
 if __name__ == "__main__":

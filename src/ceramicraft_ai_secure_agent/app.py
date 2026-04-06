@@ -1,25 +1,27 @@
 """FastAPI application entry point for the AI Secure Agent."""
 
 from __future__ import annotations
+
+import asyncio
+import contextlib
 from typing import Optional
 
-from fastapi import FastAPI, Request, Header, HTTPException
-import contextlib
-import asyncio
-from ceramicraft_ai_secure_agent.utils.logger import get_logger
+from fastapi import FastAPI, Header, HTTPException, Request
+
 from ceramicraft_ai_secure_agent.api.risk_api import router as risk_router
 from ceramicraft_ai_secure_agent.kafka.consumer import consume
 from ceramicraft_ai_secure_agent.service.feature_service import (
-    validate_and_update_feature_with_request,
     UserRequest,
+    validate_and_update_feature_with_request,
 )
-
+from ceramicraft_ai_secure_agent.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
+    task = None
     try:
         task = asyncio.create_task(consume())
         logger.info("start to create kafka consumer task")
@@ -28,9 +30,10 @@ async def lifespan(app: FastAPI):
         logger.error(f"Failed to initialize application: {e}")
         raise e
     finally:
-        task.cancel()
-        await asyncio.gather(task, return_exceptions=True)
-        logger.info("kafka consumer task cancelled successfully")
+        if task is not None:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            logger.info("kafka consumer task cancelled successfully")
 
 
 app = FastAPI(
@@ -62,7 +65,9 @@ async def verify_user(
     if user_id is None:
         return
 
-    client_ip = x_real_ip or request.client.host
+    client_ip = (
+        x_real_ip or (request.client.host if request.client else None) or "127.0.0.1"
+    )
     original_url = request.headers.get("X-Forwarded-Uri") or str(request.url)
     method = request.headers.get("X-Forwarded-Method") or request.method
 
@@ -76,7 +81,7 @@ async def verify_user(
     userRequest = UserRequest(
         user_id=int(user_id), ip=client_ip, uri=original_url, method=method
     )
-    if not validate_and_update_feature_with_request(userRequest=userRequest):
+    if not validate_and_update_feature_with_request(user_request=userRequest):
         raise HTTPException(status_code=403, detail="User is blacklisted")
     return
 

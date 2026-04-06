@@ -1,14 +1,18 @@
 import os
-from typing import Any, TypeVar, Callable
+from typing import Any, Callable, TypeVar, cast
+
+import mlflow
 
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
 
 F = TypeVar("F", bound=Callable[..., Any])
 
-try:
-    import mlflow
-except Exception:  # pragma: no cover - degrade gracefully when MLflow is absent
-    mlflow = None  # type: ignore[assignment]
+
+def get_current_active_span():
+    tracing = getattr(mlflow, "tracing", None)
+    func = getattr(tracing, "get_current_active_span", lambda: None)
+    return func()
+
 
 logger = get_logger(__name__)
 
@@ -25,6 +29,8 @@ PROMPT_VERSION = os.environ.get(
     "v2",
 )
 LLM_MODEL_NAME = os.environ.get("OPENAI_MODEL_NAME", "gpt-4o-mini")
+
+_tracing_initialized = False
 
 
 def _is_tracing_enabled() -> bool:
@@ -59,7 +65,7 @@ def trace(name: str):
             return func
 
         init_tracing_context()
-        return mlflow.trace(name=name)(func)
+        return cast(F, mlflow.trace(name=name)(func))
 
     return decorator
 
@@ -70,7 +76,7 @@ def safe_update_trace(metadata: dict[str, Any]) -> None:
         return
 
     try:
-        active_span = mlflow.tracing.get_current_active_span()
+        active_span = get_current_active_span()
         if active_span:
             for key, value in metadata.items():
                 active_span.set_attribute(key, value)
