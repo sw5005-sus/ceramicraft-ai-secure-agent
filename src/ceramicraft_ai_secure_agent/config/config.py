@@ -36,8 +36,17 @@ class Config(BaseModel):
 
 
 def load_config() -> Config:
-    current_file_dir = os.path.dirname(os.path.abspath(__file__))
-    config_path = os.path.join(current_file_dir, "config.yaml")
+    config_path = None
+    if "CONFIG_PATH" in os.environ:
+        config_path = os.environ["CONFIG_PATH"]
+        print(
+            f"Using config path from environment variable CONFIG_PATH: {config_path}",
+            flush=True,
+        )
+    else:
+        current_file_dir = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(current_file_dir, "config.yaml")
+        print(f"CONFIG_PATH not set, using default path: {config_path}", flush=True)
     with open(config_path, "r") as f:
         config_dict = yaml.safe_load(f)
     return Config(**config_dict)
