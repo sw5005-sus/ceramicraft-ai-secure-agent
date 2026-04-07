@@ -21,6 +21,7 @@ from ceramicraft_ai_secure_agent.rediscli import (
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
 
 logger = get_logger(__name__)
+feature_executor = ThreadPoolExecutor(max_workers=100)
 
 
 class UserRequest:
@@ -56,7 +57,7 @@ def extract_features(user_id: int) -> dict[str, int | float | str]:
     """Extract a flat feature dictionary from a raw transaction.
 
     Args:
-        transaction: Raw transaction payload (dict).
+        user_id: The user ID for which to extract features.
 
     Returns:
         Dictionary mapping feature names to numeric values.
@@ -65,7 +66,7 @@ def extract_features(user_id: int) -> dict[str, int | float | str]:
     last_day = int(datetime.now().timestamp() - 24 * 3600)
     now = int(datetime.now().timestamp())
 
-    with ThreadPoolExecutor() as executor:
+    with feature_executor as executor:
         features = {
             "order_count_last_1h": executor.submit(
                 order_storage.count_order_by_time,
@@ -107,7 +108,7 @@ def extract_features(user_id: int) -> dict[str, int | float | str]:
 
         results = {k: v.result() for k, v in features.items()}
 
-    logger.debug(f"Extracted features for user {user_id}: {features}")
+    logger.debug(f"Extracted features for user {user_id}: {results}")
     return results
 
 
@@ -124,8 +125,7 @@ def extract_features_tool(user_id: int) -> dict:
     """Extract a flat feature dictionary from a raw transaction payload.
 
     Args:
-        transaction: Raw transaction payload dict containing fields such as
-            ``amount``, ``country``, and ``merchant_category``.
+        user_id: The user ID for which to extract features.
 
     Returns:
         Dictionary mapping feature names to numeric values ready for the

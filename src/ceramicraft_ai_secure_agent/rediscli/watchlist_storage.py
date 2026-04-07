@@ -7,7 +7,7 @@ from ceramicraft_ai_secure_agent.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-def add_watechlist(user_id: int) -> None:
+def add_watchlist(user_id: int) -> None:
     """Add a user ID to the watchlist."""
     try:
         expire_time = datetime.now() + timedelta(days=1)
@@ -20,7 +20,7 @@ def add_watechlist(user_id: int) -> None:
 def is_watchlisted(user_id: int) -> bool:
     """Check if a user ID is in the watchlist."""
     try:
-        expireTime = get_redis_client().zscore("watchlist", user_id)
+        expireTime = get_redis_client().zscore("watchlist", str(user_id))
         if expireTime is None:
             return False
         if float(cast(float, expireTime)) < datetime.now().timestamp():

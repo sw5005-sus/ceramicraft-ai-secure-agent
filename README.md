@@ -44,7 +44,7 @@ src/ceramicraft_ai_secure_agent/
 ### `ml_model.py`
 | Function | Description |
 |---|---|
-| `predict(features)` | Loads the serialised scikit-learn model and returns `fraud_probability` and `ml_prediction` for a feature vector. |
+| `predict(features)` | Loads the serialised scikit-learn model and returns `fraud_probability` and `prediction` for a feature vector. |
 | `predict_tool` | LangChain `@tool`-decorated wrapper used by the LangGraph agent. |
 
 ### `risk_scoring.py`

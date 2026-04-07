@@ -8,7 +8,6 @@ from typing import Optional
 
 from fastapi import FastAPI, Header, HTTPException, Request
 
-from ceramicraft_ai_secure_agent.api.risk_api import router as risk_router
 from ceramicraft_ai_secure_agent.kafka.consumer import consume
 from ceramicraft_ai_secure_agent.service.feature_service import (
     UserRequest,
@@ -45,8 +44,6 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
-
-app.include_router(risk_router)
 
 
 @app.get("/health", tags=["Health"])

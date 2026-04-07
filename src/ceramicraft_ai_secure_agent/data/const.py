@@ -1,5 +1,4 @@
 from enum import IntEnum
-from http.client import UNAUTHORIZED
 
 
 class RiskUserReviewDecision(IntEnum):
@@ -10,11 +9,11 @@ class RiskUserReviewDecision(IntEnum):
     UNRECOGNIZED = 0
 
     @classmethod
-    def from_str(cls, action_str: str):
+    def from_str(cls, action_str: str) -> "RiskUserReviewDecision":
         mapping = {
             "manual_review": cls.MANUAL_REVIEW,
             "block": cls.BLOCK,
             "watchlist": cls.WATCHLIST,
             "allow": cls.ALLOW,
         }
-        return mapping.get(action_str.lower(), UNAUTHORIZED)
+        return mapping.get(action_str.lower(), cls.UNRECOGNIZED)

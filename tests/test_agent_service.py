@@ -7,9 +7,6 @@ from unittest.mock import MagicMock, mock_open, patch
 from ceramicraft_ai_secure_agent.data.state import AssessmentState
 
 # --- 1. 环境与依赖隔离 (必须在最顶部) ---
-# 关闭 MLflow 追踪和防止真实调用 OpenAI
-os.environ["ENABLE_MLFLOW_TRACING"] = "false"
-os.environ["OPENAI_API_KEY"] = ""
 
 # 拦截所有存储层模块，防止导入时尝试连接数据库
 mock_storage = MagicMock()
@@ -35,18 +32,21 @@ from ceramicraft_ai_secure_agent.service.agent_service import (  # noqa: E402
 class TestAgentService(unittest.TestCase):
     def setUp(self):
         """清理单例状态，确保测试隔离"""
+        os.environ["ENABLE_MLFLOW_TRACING"] = "false"
+        os.environ["OPENAI_API_KEY"] = ""
         agent_service._graph = None
         agent_service._llm = None
         agent_service._loaded_prompt = None
         mock_storage.reset_mock()
 
     @patch("ceramicraft_ai_secure_agent.service.agent_service._get_graph")
-    def test_assess_risk_skip_logic(self, mock_get_graph):
+    @patch("ceramicraft_ai_secure_agent.service.agent_service.whitelist_storage")
+    def test_assess_risk_skip_logic(self, mock_whitelist_storage, mock_get_graph):
         """测试黑白名单跳过逻辑"""
         user_id = 888
 
         # 模拟用户在白名单中
-        mock_storage.whitelist_storage.is_whitelisted.return_value = True
+        mock_whitelist_storage.is_whitelisted.return_value = True
 
         result = agent_service.assess_risk(user_id)
 
@@ -55,13 +55,17 @@ class TestAgentService(unittest.TestCase):
         mock_get_graph.return_value.invoke.assert_not_called()
 
     @patch("ceramicraft_ai_secure_agent.service.agent_service._get_graph")
-    def test_assess_risk_full_flow(self, mock_get_graph):
+    @patch("ceramicraft_ai_secure_agent.service.agent_service.whitelist_storage")
+    @patch("ceramicraft_ai_secure_agent.service.agent_service.blacklist_storage")
+    def test_assess_risk_full_flow(
+        self, mock_blacklist_storage, mock_whitelist_storage, mock_get_graph
+    ):
         """测试完整的风险评估链路"""
         user_id = 1001
 
         # 1. 模拟非跳过状态
-        mock_storage.whitelist_storage.is_whitelisted.return_value = False
-        mock_storage.blacklist_storage.is_blacklisted.return_value = False
+        mock_whitelist_storage.is_whitelisted.return_value = False
+        mock_blacklist_storage.is_blacklisted.return_value = False
 
         # 2. 模拟 LangGraph 的执行结果
         rec_json = '{"recommended_action": "manual_review", "confidence": "high"}'
@@ -78,6 +82,7 @@ class TestAgentService(unittest.TestCase):
 
         # 3. 执行测试
         result = agent_service.assess_risk(user_id)
+        print("Assess Risk Result:", result)
 
         # 4. 断言验证返回结构
         self.assertEqual(result["user_id"], user_id)

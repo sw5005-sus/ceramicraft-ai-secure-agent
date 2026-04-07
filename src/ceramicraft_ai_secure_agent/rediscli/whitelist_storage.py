@@ -17,10 +17,10 @@ def add_whitelist(user_id: int) -> None:
         print(f"Failed to add user {user_id} to whitelist: {e}")
 
 
-async def is_whitelisted(user_id: int) -> bool:
+def is_whitelisted(user_id: int) -> bool:
     """Check if a user ID is in the whitelist."""
     try:
-        expireTime = get_redis_client().zscore("whitelist", user_id)
+        expireTime = get_redis_client().zscore("whitelist", str(user_id))
         if expireTime is None:
             return False
         if float(cast(float, expireTime)) < datetime.now().timestamp():

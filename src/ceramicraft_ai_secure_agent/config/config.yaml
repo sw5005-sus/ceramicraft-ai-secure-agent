@@ -10,6 +10,5 @@ mysql:
   host: 10.249.171.135
   port: 3306
   username: root
-  password: changeit
   database: admin_db
   max_connect_size: 5

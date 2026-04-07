@@ -11,7 +11,7 @@ class RiskUserReview:
         risk_level: str = "",
         rule_score: float = 0.0,
         fraud_probability: float = 0.0,
-        triggered_rules: list[str] = [],
+        triggered_rules: list[str] | None = None,
     ):
         self.user_id = user_id
         self.create_time = create_time
@@ -23,4 +23,5 @@ class RiskUserReview:
         self.risk_level = risk_level
         self.rule_score = rule_score
         self.fraud_probability = fraud_probability
-        self.rules = ",".join(triggered_rules)
+        rule_list = triggered_rules if triggered_rules is not None else []
+        self.rules = ",".join(rule_list)

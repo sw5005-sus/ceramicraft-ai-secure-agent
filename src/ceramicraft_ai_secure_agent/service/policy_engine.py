@@ -36,7 +36,7 @@ def should_block_directly(state: Assessment) -> bool:
     risk_score = state["score_result"].get("risk_score", 0.0)
     triggered_rules = state["score_result"].get("triggered_rules", [])
 
-    # 1. hish risk score
+    # 1. high risk score
     if risk_score >= THRESHOLD_RISK_SCORE_BLOCK:
         return True
 
@@ -47,7 +47,7 @@ def should_block_directly(state: Assessment) -> bool:
     ):
         return True
 
-    # 3. case: many orders in shorgt time with multiple unique IPs
+    # 3. case: many orders in short time with multiple unique IPs
     order_1h = features.get("order_count_last_1h", 0)
     if (
         "high_order_count_last_1h" in triggered_rules
@@ -78,10 +78,9 @@ def should_block_directly(state: Assessment) -> bool:
 
 def need_llm_judgment(state: Assessment) -> bool:
     """need LLM judgment"""
-    features = state["features"]
     rule_score = state["rule_result"].get("rule_score", 0.0)
     fraud_probability = state["ml_result"].get("fraud_probability", 0.0)
-    risk_score = features.get("risk_score", 0.0)
+    risk_score = state["score_result"].get("risk_score", 0.0)
     # low risk score, no triggered rules, low fraud probability, can skip LLM
     if (
         risk_score < THRESHOLD_RISK_SCORE_SAFE

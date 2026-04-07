@@ -22,7 +22,7 @@ def add_blacklist(user_id: int) -> None:
 def is_blacklisted(user_id: int) -> bool:
     """Check if a user ID is in the blacklist."""
     try:
-        expireTime = get_redis_client().zscore("blacklist", user_id)
+        expireTime = get_redis_client().zscore("blacklist", str(user_id))
         if expireTime is None:
             return False
         if float(cast(float, expireTime)) < datetime.now().timestamp():

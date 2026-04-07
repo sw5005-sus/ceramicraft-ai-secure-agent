@@ -147,9 +147,6 @@ class TestMLModel(unittest.TestCase):
         ):
             result = self.ml_model.predict({"some_feature": 1})
 
-        # Note:
-        # Current implementation returns `ml_prediction` on the error path,
-        # while the success path returns `prediction`.
         self.assertEqual(
             result,
             {

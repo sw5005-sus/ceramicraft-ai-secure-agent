@@ -33,8 +33,8 @@ def _load_model():
     if _model is None:
         model_path = Path(os.environ.get("FRAUD_MODEL_PATH", str(_MODEL_PATH)))
         logger.info("Loading fraud model from %s", model_path)
-        with open(model_path, "rb") as f:
-            _model = json.load(f)  # noqa: S301
+        with open(model_path, "r", encoding="utf-8") as f:
+            _model = json.load(f)
         logger.info("Fraud model loaded successfully.")
     return _model
 
@@ -68,7 +68,7 @@ def predict(features: dict[str, Any]) -> dict[str, Any]:
     Returns:
         Dictionary with keys:
           - ``fraud_probability`` (float): probability in [0, 1].
-          - ``ml_prediction`` (int): 1 = fraud, 0 = legitimate.
+          - ``prediction`` (int): 1 = fraud, 0 = legitimate.
     """
     try:
         prob = predict_proba_from_features(features)
@@ -91,6 +91,6 @@ def predict_tool(features: dict) -> dict:
 
     Returns:
         Dictionary with ``fraud_probability`` (float in [0, 1]) and
-        ``ml_prediction`` (int: 1 = fraud, 0 = legitimate).
+        ``prediction`` (int: 1 = fraud, 0 = legitimate).
     """
     return predict(features)

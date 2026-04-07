@@ -194,7 +194,7 @@ class BlockAction(Action):
 class WatchlistAction(Action):
     def run(self, state: _AssessmentState) -> None:
         user_id = state["user_id"]
-        watchlist_storage.add_watechlist(user_id=user_id)
+        watchlist_storage.add_watchlist(user_id=user_id)
         create_risk_user_review(build_risk_user_review_from_state(state=state))
 
 

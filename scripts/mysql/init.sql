@@ -1,4 +1,4 @@
-CREATE TABLE RiskUserReview (
+CREATE TABLE risk_user_reviews (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
     create_time BIGINT NOT NULL,
