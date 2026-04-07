@@ -8,6 +8,7 @@ from typing import Optional
 
 from fastapi import FastAPI, Header, HTTPException, Request
 
+from ceramicraft_ai_secure_agent.config.config import get_config
 from ceramicraft_ai_secure_agent.kafka.consumer import consume
 from ceramicraft_ai_secure_agent.service.feature_service import (
     UserRequest,
@@ -35,21 +36,26 @@ async def lifespan(app: FastAPI):
             logger.info("kafka consumer task cancelled successfully")
 
 
+PREFIX = "/ai-secure-agent-ms/v1"
+
 app = FastAPI(
-    title="AI Secure Agent – Fraud Risk API",
+    title="AI Secure Agent - Fraud Risk API",
     description=(
         "Real-time fraud risk assessment combining rule-based heuristics "
         "and a machine-learning model to score financial transactions."
     ),
+    docs_url=f"{PREFIX}/docs",
+    redoc_url=f"{PREFIX}/redoc",
+    openapi_url=f"{PREFIX}/openapi.json",
     version="1.0.0",
     lifespan=lifespan,
 )
 
 
-@app.get("/health", tags=["Health"])
+@app.get("/ai-secure-agent-ms/v1/ping", tags=["Health"])
 async def health_check() -> dict[str, str]:
     """Return a simple health-check response."""
-    return {"status": "ok"}
+    return {"message": "pong"}
 
 
 @app.get("/risk/verify")
@@ -84,12 +90,10 @@ async def verify_user(
 
 
 if __name__ == "__main__":
-    import os
-
     import uvicorn
 
-    host = os.getenv("HOST", "127.0.0.1")
-    port = int(os.getenv("PORT", 8000))
+    host = get_config().http.host
+    port = get_config().http.port
     logger.info("Starting AI Secure Agent API server on %s:%s ...", host, port)
 
     uvicorn.run(

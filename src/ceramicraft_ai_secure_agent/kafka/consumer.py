@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from aiokafka import AIOKafkaConsumer
 
-from ceramicraft_ai_secure_agent.config.config import system_config
+from ceramicraft_ai_secure_agent.config.config import get_config
 from ceramicraft_ai_secure_agent.kafka import order_handler, user_register_handler
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
 
@@ -27,8 +27,8 @@ async def consume():
     loop = asyncio.get_running_loop()
     consumer = AIOKafkaConsumer(
         *topics,
-        bootstrap_servers=system_config.kafka.bootstrap_servers,
-        group_id=system_config.kafka.group_id,
+        bootstrap_servers=get_config().kafka.bootstrap_servers,
+        group_id=get_config().kafka.group_id,
         enable_auto_commit=True,
         session_timeout_ms=30000,
         heartbeat_interval_ms=10000,

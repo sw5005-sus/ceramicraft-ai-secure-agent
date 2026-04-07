@@ -3,7 +3,7 @@ import threading
 
 from mysql.connector import Error, pooling
 
-from ceramicraft_ai_secure_agent.config.config import system_config
+from ceramicraft_ai_secure_agent.config.config import get_config
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -22,12 +22,12 @@ def get_mysql_connection_pool():
         try:
             pool = pooling.MySQLConnectionPool(
                 pool_name="mypool",
-                pool_size=system_config.mysql.max_connect_size,
-                host=system_config.mysql.host,
-                port=system_config.mysql.port,
-                user=system_config.mysql.username,
+                pool_size=get_config().mysql.max_connect_size,
+                host=get_config().mysql.host,
+                port=get_config().mysql.port,
+                user=get_config().mysql.username,
                 password=os.getenv("MYSQL_PASSWORD"),
-                database=system_config.mysql.database,
+                database=get_config().mysql.database,
             )
             logger.info("MySQL connection pool initialized successfully!")
             _connetion_pool = pool

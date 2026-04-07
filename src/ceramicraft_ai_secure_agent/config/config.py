@@ -1,4 +1,5 @@
 import os
+import threading
 
 import yaml
 from pydantic import BaseModel
@@ -18,12 +19,17 @@ class MysqlConfig(BaseModel):
     host: str
     port: int
     username: str
-    password: str
     database: str
     max_connect_size: int
 
 
+class HttpServerConfig(BaseModel):
+    host: str
+    port: int
+
+
 class Config(BaseModel):
+    http: HttpServerConfig
     redis: RedisConfig
     kafka: KafkaConfig
     mysql: MysqlConfig
@@ -37,4 +43,15 @@ def load_config() -> Config:
     return Config(**config_dict)
 
 
-system_config = load_config()
+_config_lock = threading.Lock()
+_system_config: Config | None = None
+
+
+def get_config() -> Config:
+    """Thread-safe singleton getter for the system configuration."""
+    global _system_config
+    if _system_config is None:
+        with _config_lock:
+            if _system_config is None:  # Double-checked locking
+                _system_config = load_config()
+    return _system_config

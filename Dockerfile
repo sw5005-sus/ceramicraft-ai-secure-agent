@@ -40,5 +40,5 @@ COPY --from=builder --chown=appuser:appgroup /app/.venv /app/.venv
 COPY --from=builder --chown=appuser:appgroup /app/src /app/src
     
 USER appuser
-EXPOSE 8000
+EXPOSE 8080
 CMD ["python", "-m", "ceramicraft_ai_secure_agent.app"]
