@@ -19,7 +19,7 @@ jobs:
 
       - name: Build image
         run: |
-          docker build -t ceramicraft-ai-secure-agent:${{ github.sha }} .
+          docker build --no-cache -t ceramicraft-ai-secure-agent:${{ github.sha }} .
 
       - name: Run Trivy scanner (Image mode)
         uses: aquasecurity/trivy-action@v0.35.0

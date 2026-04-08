@@ -28,9 +28,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/app/.venv/bin:$PATH"
 
-RUN apk add --no-cache \
-    zlib>=1.3.2-r0 \
-    curl
+RUN apk update && \
+    apk upgrade --no-cache zlib && \
+    apk add --no-cache curl && \
+    rm -rf /var/cache/apk/*
 
 WORKDIR /app
     
