@@ -162,6 +162,130 @@ class TestAgentService(unittest.TestCase):
         res = agent_service._get_loaded_prompt()
         self.assertEqual(res, "Mocked Prompt Content")
 
+    @patch("ceramicraft_ai_secure_agent.service.agent_service.extract_features_tool")
+    def test_extract_features_node(self, mock_extract_features_tool):
+        """Test feature extraction"""
+        user_id = 123
+        state: AssessmentState = {
+            "user_id": user_id,
+            "features": {},
+            "rule_result": {},
+            "ml_result": {},
+            "score_result": {},
+            "recommendation": "",
+        }
+
+        # setup mock return value for feature extraction
+        mock_extract_features_tool.invoke.return_value = {
+            "feature1": 1.0,
+            "feature2": 2.0,
+        }
+
+        result = agent_service._extract_features_node(state)
+
+        # verify features were added to the state
+        self.assertIn("features", result)
+        self.assertEqual(result["features"], {"feature1": 1.0, "feature2": 2.0})
+        mock_extract_features_tool.invoke.assert_called_once_with({"user_id": user_id})
+
+    @patch("ceramicraft_ai_secure_agent.service.agent_service.evaluate_rules_tool")
+    def test_evaluate_rules_node(self, mock_evaluate_rules_tool):
+        """Test the evaluate rules node functionality."""
+        user_id = 123
+        state: _AssessmentState = {
+            "user_id": user_id,
+            "features": {"feature1": 1.0, "feature2": 2.0},
+            "rule_result": {},
+            "ml_result": {},
+            "score_result": {},
+            "recommendation": "",
+        }
+
+        # Mock the return value of the evaluate_rules_tool
+        mock_evaluate_rules_tool.invoke.return_value = {
+            "rule_score": 0.7,
+            "hits": ["rule1", "rule2"],
+        }
+
+        result = agent_service._evaluate_rules_node(state)
+
+        # Verify the result structure
+        self.assertIn("rule_result", result)
+        self.assertEqual(result["rule_result"]["rule_score"], 0.7)
+        self.assertIn("hits", result["rule_result"])
+        self.assertEqual(result["rule_result"]["hits"], ["rule1", "rule2"])
+
+        # Ensure the evaluate_rules_tool was called with the correct features
+        mock_evaluate_rules_tool.invoke.assert_called_once_with(
+            {"features": state["features"]}
+        )
+
+    @patch("ceramicraft_ai_secure_agent.service.agent_service.predict_tool")
+    def test_predict_node(self, mock_predict_tool):
+        """Test the predict node functionality."""
+        user_id = 123
+        state: _AssessmentState = {
+            "user_id": user_id,
+            "features": {"feature1": 1.0, "feature2": 2.0},
+            "rule_result": {},
+            "ml_result": {},
+            "score_result": {},
+            "recommendation": "",
+        }
+
+        # Mock the return value of the predict_tool
+        mock_predict_tool.invoke.return_value = {
+            "prediction": 1,
+            "fraud_probability": 0.2,
+        }
+
+        result = agent_service._predict_node(state)
+
+        # Verify the result structure
+        self.assertIn("ml_result", result)
+        self.assertEqual(result["ml_result"]["prediction"], 1)
+        self.assertEqual(result["ml_result"]["fraud_probability"], 0.2)
+
+        # Ensure the predict_tool was called with the correct features
+        mock_predict_tool.invoke.assert_called_once_with(
+            {"features": state["features"]}
+        )
+
+    @patch(
+        "ceramicraft_ai_secure_agent.service.agent_service.risk_scoring.compute_score"
+    )
+    def test_compute_score_node(self, mock_compute_score):
+        """Test the compute score node functionality."""
+        user_id = 123
+        state: _AssessmentState = {
+            "user_id": user_id,
+            "features": {"feature1": 1.0, "feature2": 2.0},
+            "rule_result": {"rule_score": 0.7, "hits": ["rule1", "rule2"]},
+            "ml_result": {"risk_score": 0.75, "fraud_probability": 0.2},
+            "score_result": {},
+            "recommendation": "",
+        }
+
+        # Mock the return value of the compute_score function
+        mock_compute_score.return_value = {
+            "risk_score": 0.65,
+            "risk_level": "MEDIUM",
+            "triggered_rules": ["rule1", "rule2"],
+        }
+
+        result = agent_service._compute_score_node(state)
+
+        # Verify the result structure
+        self.assertIn("score_result", result)
+        self.assertEqual(result["score_result"]["risk_score"], 0.65)
+        self.assertEqual(result["score_result"]["risk_level"], "MEDIUM")
+        self.assertEqual(result["score_result"]["triggered_rules"], ["rule1", "rule2"])
+
+        # Ensure the compute_score function was called with the correct parameters
+        mock_compute_score.assert_called_once_with(
+            state["rule_result"], state["ml_result"]
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
