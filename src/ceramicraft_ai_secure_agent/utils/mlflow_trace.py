@@ -1,16 +1,20 @@
 import os
-from typing import Any
+from typing import Any, Callable, TypeVar, cast
+
+import mlflow
 
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
 
-try:
-    import mlflow
-except Exception:  # pragma: no cover - degrade gracefully when MLflow is absent
-    mlflow = None  # type: ignore[assignment]
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+def get_current_active_span():
+    tracing = getattr(mlflow, "tracing", None)
+    func = getattr(tracing, "get_current_active_span", lambda: None)
+    return func()
+
 
 logger = get_logger(__name__)
-
-_MLFLOW_INITIALIZED = False
 
 MLFLOW_EXPERIMENT_NAME = os.environ.get(
     "MLFLOW_EXPERIMENT_NAME",
@@ -22,54 +26,59 @@ PROMPT_NAME = os.environ.get(
 )
 PROMPT_VERSION = os.environ.get(
     "FRAUD_RECOMMENDATION_PROMPT_VERSION",
-    "v1",
+    "v2",
 )
 LLM_MODEL_NAME = os.environ.get("OPENAI_MODEL_NAME", "gpt-4o-mini")
 
+_tracing_initialized = False
 
-def safe_update_current_trace(metadata: dict[str, Any] | None = None) -> None:
-    """Best-effort update of current MLflow trace metadata."""
-    if mlflow is None or not hasattr(mlflow, "update_current_trace"):
+
+def _is_tracing_enabled() -> bool:
+    return os.environ.get("ENABLE_MLFLOW_TRACING", "false").lower() == "true"
+
+
+def init_tracing_context() -> None:
+    global _tracing_initialized
+
+    if _tracing_initialized or not _is_tracing_enabled() or mlflow is None:
         return
 
     try:
-        mlflow.update_current_trace(metadata=metadata or {})
-    except Exception as exc:  # pragma: no cover - tracing must not break business flow
-        logger.warning("Failed to update MLflow trace metadata: %s", exc)
-
-
-def init_mlflow_tracing() -> None:
-    """Initialize MLflow tracing once, if MLflow is configured."""
-    global _MLFLOW_INITIALIZED
-
-    if _MLFLOW_INITIALIZED or mlflow is None:
-        return
-
-    tracking_uri = os.environ.get("MLFLOW_TRACKING_URI")
-    if not tracking_uri:
-        logger.info("MLFLOW_TRACKING_URI not set; MLflow tracing disabled.")
-        _MLFLOW_INITIALIZED = True
-        return
-
-    try:
-        mlflow.set_tracking_uri(tracking_uri)
-        mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
-
-        # LangGraph tracing is supported via LangChain autologging.
-        # If this MLflow version does not support it, keep service functional.
-        if hasattr(mlflow, "langchain") and hasattr(mlflow.langchain, "autolog"):
-            try:
-                mlflow.langchain.autolog(log_traces=True)
-            except TypeError:
-                # Backward compatibility for older signatures
-                mlflow.langchain.autolog()
-
-        logger.info(
-            "MLflow tracing initialized. tracking_uri=%s experiment=%s",
-            tracking_uri,
-            MLFLOW_EXPERIMENT_NAME,
+        mlflow.set_tracking_uri(
+            os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5000")
         )
-    except Exception as exc:  # pragma: no cover - tracing must not break business flow
-        logger.warning("Failed to initialize MLflow tracing: %s", exc)
+        mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
+        _tracing_initialized = True
+    except Exception as e:
+        logger.error("Failed to initialize lightweight tracing: %s", e)
 
-    _MLFLOW_INITIALIZED = True
+
+def trace(name: str):
+    """Lazy MLflow trace decorator.
+
+    When tracing is disabled, this becomes a no-op decorator so module import
+    stays side-effect free in tests and CI.
+    """
+
+    def decorator(func: F) -> F:
+        if not _is_tracing_enabled() or mlflow is None:
+            return func
+
+        init_tracing_context()
+        return cast(F, mlflow.trace(name=name)(func))
+
+    return decorator
+
+
+def safe_update_trace(metadata: dict[str, Any]) -> None:
+    """Update current trace metadata only when MLflow tracing is enabled."""
+    if not _is_tracing_enabled():
+        return
+
+    try:
+        active_span = get_current_active_span()
+        if active_span:
+            for key, value in metadata.items():
+                active_span.set_attribute(key, value)
+    except Exception as exc:
+        logger.warning("Trace metadata update skipped: %s", exc)

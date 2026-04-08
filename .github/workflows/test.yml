@@ -22,7 +22,12 @@ jobs:
         run: uv sync --frozen --no-dev
 
       - name: Run tests
-        run: uv run pytest -v
+        run: |
+          uv run pytest tests/ -v \
+          -p no:langsmith \
+          -p no:anyio \
+          --maxfail=1 \
+          --disable-warnings
         env:
           ENABLE_MLFLOW_TRACING: "false"
           LANGSMITH_TRACING: "false"

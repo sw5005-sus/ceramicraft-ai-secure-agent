@@ -1,129 +1,167 @@
-"""Unit tests for the LangGraph-based agent service."""
-
-from __future__ import annotations
-
+import json
 import os
-from unittest.mock import MagicMock, patch
+import sys
+import unittest
+from unittest.mock import MagicMock, mock_open, patch
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+from ceramicraft_ai_secure_agent.data.state import AssessmentState
 
-_SAMPLE_TRANSACTION: dict = {
-    "transaction_id": "txn_test_001",
-    "amount": 200.0,
-    "merchant_category": "retail",
-    "country": "US",
-    "user_id": "user_42",
-    "merchant": "TestMerchant",
-}
+# --- 1. 环境与依赖隔离 (必须在最顶部) ---
 
-_HIGH_RISK_TRANSACTION: dict = {
-    "transaction_id": "txn_test_002",
-    "high_order_count_last_1h": 20.0,
-    "multiple_unique_ips": 10.0,
-    "avg_order_amount": 1.0,
-    "order_count_last_24h": 20,
-    "account_age_days": 3,
-}
+# 拦截所有存储层模块，防止导入时尝试连接数据库
+mock_storage = MagicMock()
+sys.modules["ceramicraft_ai_secure_agent.rediscli"] = mock_storage
+sys.modules["ceramicraft_ai_secure_agent.rediscli.blacklist_storage"] = mock_storage
+sys.modules["ceramicraft_ai_secure_agent.rediscli.watchlist_storage"] = mock_storage
+sys.modules["ceramicraft_ai_secure_agent.rediscli.whitelist_storage"] = mock_storage
+sys.modules["ceramicraft_ai_secure_agent.rediscli.user_last_status_storage"] = (
+    mock_storage
+)
+sys.modules["ceramicraft_ai_secure_agent.mysqlcli.risk_user_review_storage"] = (
+    mock_storage
+)
+
+# --- 2. 导入被测模块 ---
+# 注意：一定要在上面的 mock 注入后再导入
+import ceramicraft_ai_secure_agent.service.agent_service as agent_service  # noqa: E402
+from ceramicraft_ai_secure_agent.service.agent_service import (  # noqa: E402
+    _AssessmentState,
+)
 
 
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
-class TestAssessRisk:
-    """Tests for agent_service.assess_risk via the LangGraph pipeline."""
+class TestAgentService(unittest.TestCase):
+    def setUp(self):
+        """清理单例状态，确保测试隔离"""
+        os.environ["ENABLE_MLFLOW_TRACING"] = "false"
+        os.environ["OPENAI_API_KEY"] = ""
+        agent_service._graph = None
+        agent_service._llm = None
+        agent_service._loaded_prompt = None
+        mock_storage.reset_mock()
 
-    def _run(self, transaction: dict) -> dict:
-        """Run assess_risk with the LLM node patched out (no API key needed)."""
-        # Patch the LLM so tests run without a real OPENAI_API_KEY
-        with patch.dict("os.environ", clear=False):
-            # 2. 依然保持你的 OpenAI Key 清理逻辑
-            os.environ.pop("OPENAI_API_KEY", None)
-            os.environ["LANGSMITH_TRACING"] = "false"
-            os.environ["LANGCHAIN_TRACING_V2"] = "false"
+    @patch("ceramicraft_ai_secure_agent.service.agent_service._get_graph")
+    @patch("ceramicraft_ai_secure_agent.service.agent_service.whitelist_storage")
+    def test_assess_risk_skip_logic(self, mock_whitelist_storage, mock_get_graph):
+        """测试黑白名单跳过逻辑"""
+        user_id = 888
 
-            from ceramicraft_ai_secure_agent.service import agent_service
+        # 模拟用户在白名单中
+        mock_whitelist_storage.is_whitelisted.return_value = True
 
-            # 3. 动态 import 以确保装饰器被 Mock 掉
-            return agent_service.assess_risk(transaction)
+        result = agent_service.assess_risk(user_id)
 
-    def test_returns_expected_keys(self):
-        result = self._run(_SAMPLE_TRANSACTION)
-        expected_keys = {
-            "transaction_id",
-            "risk_score",
-            "risk_level",
-            "triggered_rules",
-            "fraud_probability",
-            "recommendation",
+        # 验证返回空字典且未触发图调用
+        self.assertEqual(result, {})
+        mock_get_graph.return_value.invoke.assert_not_called()
+
+    @patch("ceramicraft_ai_secure_agent.service.agent_service._get_graph")
+    @patch("ceramicraft_ai_secure_agent.service.agent_service.whitelist_storage")
+    @patch("ceramicraft_ai_secure_agent.service.agent_service.blacklist_storage")
+    def test_assess_risk_full_flow(
+        self, mock_blacklist_storage, mock_whitelist_storage, mock_get_graph
+    ):
+        """测试完整的风险评估链路"""
+        user_id = 1001
+
+        # 1. 模拟非跳过状态
+        mock_whitelist_storage.is_whitelisted.return_value = False
+        mock_blacklist_storage.is_blacklisted.return_value = False
+
+        # 2. 模拟 LangGraph 的执行结果
+        rec_json = '{"recommended_action": "manual_review", "confidence": "high"}'
+        mock_invoke_res = {
+            "score_result": {
+                "risk_score": 0.45,
+                "risk_level": "medium",
+                "triggered_rules": ["high_order_count"],
+                "fraud_probability": 0.3,
+            },
+            "recommendation": rec_json,
         }
-        print(result.keys())
-        assert expected_keys == set(result.keys())
+        mock_get_graph.return_value.invoke.return_value = mock_invoke_res
 
-    def test_transaction_id_preserved(self):
-        result = self._run(_SAMPLE_TRANSACTION)
-        assert result["transaction_id"] == "txn_test_001"
+        # 3. 执行测试
+        result = agent_service.assess_risk(user_id)
+        print("Assess Risk Result:", result)
 
-    def test_risk_score_in_range(self):
-        result = self._run(_SAMPLE_TRANSACTION)
-        assert 0.0 <= result["risk_score"] <= 1.0
+        # 4. 断言验证返回结构
+        self.assertEqual(result["user_id"], user_id)
+        self.assertEqual(result["risk_level"], "medium")
+        self.assertIn("high_order_count", result["triggered_rules"])
 
-    def test_risk_level_is_valid(self):
-        result = self._run(_SAMPLE_TRANSACTION)
-        assert result["risk_level"] in {"HIGH", "MEDIUM", "LOW"}
+    @patch("ceramicraft_ai_secure_agent.service.agent_service._get_llm")
+    @patch("ceramicraft_ai_secure_agent.service.agent_service.need_llm_judgment")
+    def test_llm_judge_node_no_key_fallback(self, mock_need_llm_judgment, mock_get_llm):
+        """测试在无 API KEY 时 LLM 节点是否降级"""
+        mock_need_llm_judgment.return_value = True
+        # 确保环境变量为空
+        with patch.dict(os.environ, {"OPENAI_API_KEY": ""}):
+            state: _AssessmentState = {
+                "user_id": 1,
+                "features": {},
+                "rule_result": {"hits": [], "rule_score": 0.4},
+                "ml_result": {"fraud_probability": 0.4},
+                "score_result": {"risk_score": 0.5},
+                "recommendation": "pending",
+            }
 
-    def test_fraud_probability_in_range(self):
-        result = self._run(_SAMPLE_TRANSACTION)
-        assert 0.0 <= result["fraud_probability"] <= 1.0
+            res = agent_service._llm_judge_node(state)
 
-    def test_recommendation_is_string(self):
-        result = self._run(_SAMPLE_TRANSACTION)
-        assert isinstance(result["recommendation"], str)
-        assert len(result["recommendation"]) > 0
+            # 验证是否返回了 fallback 推荐
+            self.assertIn("manual_review", res["recommendation"])
+            self.assertIn("LLM unavailable", res["recommendation"])
+            mock_get_llm.assert_not_called()
 
-    def test_triggered_rules_is_list(self):
-        result = self._run(_SAMPLE_TRANSACTION)
-        assert isinstance(result["triggered_rules"], list)
+    @patch("ceramicraft_ai_secure_agent.service.agent_service.user_last_status_storage")
+    @patch("ceramicraft_ai_secure_agent.service.agent_service.BlockAction.run")
+    def test_action_node_execution(self, mock_block_run, mock_status_storage):
+        from ceramicraft_ai_secure_agent.service.agent_service import _action_node
 
-    def test_high_risk_transaction_triggers_rules(self):
-        result = self._run(_HIGH_RISK_TRANSACTION)
-        triggered = result["triggered_rules"]
-        assert "high_order_count_last_1h" in triggered
-        assert "multiple_unique_ips" in triggered
+        state = AssessmentState(
+            user_id=777,
+            features={},
+            rule_result={},
+            ml_result={},
+            score_result={"risk_score": 0.9},
+            recommendation=json.dumps(
+                {
+                    "recommended_action": "block",
+                    "reason": "test",
+                    "analyst_summary": "s",
+                    "confidence": "high",
+                }
+            ),
+        )
 
-    def test_high_risk_transaction_has_high_score(self):
-        result = self._run(_HIGH_RISK_TRANSACTION)
-        # High-risk transactions should produce at least a MEDIUM level
-        assert result["risk_level"] in {"HIGH", "MEDIUM"}
+        _action_node(state)
 
-    def test_unknown_transaction_id_defaults(self):
-        txn = {"amount": 50.0, "country": "US", "merchant_category": "retail"}
-        result = self._run(txn)
-        assert result["transaction_id"] == "unknown"
+        mock_status_storage.set_user_last_status.assert_called_once_with(777, "block")
+        mock_block_run.assert_called_once()
 
-    def test_llm_recommendation_used_when_api_key_present(self):
-        """
-        When OPENAI_API_KEY is set in the environment,
-        the LLM node should be invoked.
-        """
-        from ceramicraft_ai_secure_agent.service import agent_service
+    def test_recommendation_parsing_fallback(self):
+        from ceramicraft_ai_secure_agent.service.agent_service import (
+            Recommendation,
+        )
 
-        fake_response = MagicMock()
-        fake_response.content = "LLM-generated recommendation."
+        bad_json = "{ 'invalid': json }"
+        res = Recommendation.from_json(bad_json)
+        self.assertEqual(res.recommended_action, "manual_review")
+        self.assertEqual(res.reason, "LLM unavailable")
 
-        with patch(
-            "ceramicraft_ai_secure_agent.service.agent_service.ChatOpenAI"
-        ) as mock_cls:
-            mock_llm = MagicMock()
-            mock_llm.invoke.return_value = fake_response
-            mock_cls.return_value = mock_llm
+    @patch("ceramicraft_ai_secure_agent.service.agent_service.Path.exists")
+    def test_get_loaded_prompt_file_not_found(self, mock_exists):
+        mock_exists.return_value = False
+        res = agent_service._get_loaded_prompt()
+        self.assertIn("Emergency fallback", res)
 
-            # Reset the module-level singleton so _get_llm() constructs a new one
-            agent_service._llm = None
+    @patch("builtins.open", new_callable=mock_open, read_data="Mocked Prompt Content")
+    @patch("ceramicraft_ai_secure_agent.service.agent_service.Path.exists")
+    def test_get_loaded_prompt_success(self, mock_exists, mock_file):
+        """test normal file loading"""
+        mock_exists.return_value = True
+        res = agent_service._get_loaded_prompt()
+        self.assertEqual(res, "Mocked Prompt Content")
 
-            with patch.dict("os.environ", {"OPENAI_API_KEY": "sk-test-key"}):
-                result = agent_service.assess_risk(_SAMPLE_TRANSACTION)
 
-        assert result["recommendation"] == "LLM-generated recommendation."
-        mock_llm.invoke.assert_called_once()
+if __name__ == "__main__":
+    unittest.main()

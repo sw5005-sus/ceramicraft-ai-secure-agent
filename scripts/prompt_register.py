@@ -1,6 +1,7 @@
 import os
 
 import mlflow
+import mlflow.genai
 
 print("1. importing mlflow ok")
 

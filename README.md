@@ -44,7 +44,7 @@ src/ceramicraft_ai_secure_agent/
 ### `ml_model.py`
 | Function | Description |
 |---|---|
-| `predict(features)` | Loads the serialised scikit-learn model and returns `fraud_probability` and `ml_prediction` for a feature vector. |
+| `predict(features)` | Loads the serialised scikit-learn model and returns `fraud_probability` and `prediction` for a feature vector. |
 | `predict_tool` | LangChain `@tool`-decorated wrapper used by the LangGraph agent. |
 
 ### `risk_scoring.py`
@@ -118,8 +118,8 @@ uv run pytest
 ### 6. Model Training
 ```
 uv sync --group train
-uv run --group train python script/train_data_gen.py
-uv run --group train python src/ceramicraft_ai_secure_agent/model/train_model.py
+uv run --group train python scripts/train_data_gen.py
+uv run --group train python scripts/train_model.py
 # open mlflow
 source .venv/bin/activate
 mlflow ui
