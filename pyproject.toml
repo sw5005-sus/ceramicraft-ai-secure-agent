@@ -18,7 +18,7 @@ dependencies = [
     "langchain>=1.2.13",
     "redis>=7.4.0",
     "mysql-connector-python>=9.6.0",
-    "mlflow-skinny>=2.14.0",
+    "mlflow-skinny>=3.11.1",
     "aiokafka>=0.11.0",
     "setuptools<82",
 ]

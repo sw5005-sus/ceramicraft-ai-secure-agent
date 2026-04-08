@@ -39,7 +39,11 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
     
 COPY --from=builder --chown=appuser:appgroup /app/.venv /app/.venv
 COPY --from=builder --chown=appuser:appgroup /app/src /app/src
-    
+
+# to avoid mlflow-skinny auth leaking into the app, disable job execution and clear the allowlist
+ENV MLFLOW_SERVER_ENABLE_JOB_EXECUTION=false
+ENV MLFLOW_SERVER_JOB_ALLOWLIST=""
+
 USER appuser
 EXPOSE 8080
 CMD ["python", "-m", "ceramicraft_ai_secure_agent.app"]
