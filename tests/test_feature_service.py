@@ -16,7 +16,9 @@ class TestFeatureService(unittest.TestCase):
     ):
         """测试正常更新用户 IP 的流程"""
         # 准备数据
-        req = UserRequest(user_id=1001, ip="192.168.1.1", uri="/login", method="POST")
+        req = UserRequest(
+            user_id=1001, ip="192.168.1.1", uri="/customer/login", method="POST"
+        )
 
         # 模拟黑名单返回 False (未命中)
         mock_blacklist_storage.is_blacklisted.return_value = False
@@ -75,12 +77,48 @@ class TestFeatureService(unittest.TestCase):
     @patch("ceramicraft_ai_secure_agent.service.feature_service.blacklist_storage")
     @patch("ceramicraft_ai_secure_agent.service.feature_service.user_storage")
     def test_validate_blacklisted_user(self, mock_user_storage, mock_blacklist_storage):
-        """测试当用户在黑名单时应跳过更新"""
-        req = UserRequest(user_id=999, ip="1.1.1.1", uri="/", method="GET")
+        """blacklist user should be blocked and IP should still be updated"""
+        req = UserRequest(
+            user_id=999,
+            ip="1.1.1.1",
+            uri="/test-ms/v1/customer/test-api",
+            method="POST",
+        )
         mock_blacklist_storage.is_blacklisted.return_value = True
 
         result = validate_and_update_feature_with_request(req)
 
         self.assertFalse(result)
-        # 确保 update_user_ip 没被调用
-        mock_user_storage.update_user_ip.assert_not_called()
+        mock_user_storage.update_user_ip.assert_called_once()
+
+    @patch("ceramicraft_ai_secure_agent.service.feature_service.blacklist_storage")
+    @patch("ceramicraft_ai_secure_agent.service.feature_service.user_storage")
+    def test_blacklisted_user_withoutblock(
+        self, mock_user_storage, mock_blacklist_storage
+    ):
+        """blacklist user is not blocked but updated when method is GET"""
+        req = UserRequest(
+            user_id=999,
+            ip="1.1.1.1",
+            uri="/test-ms/v1/customer/test-api",
+            method="GET",
+        )
+        mock_blacklist_storage.is_blacklisted.return_value = True
+
+        result = validate_and_update_feature_with_request(req)
+
+        self.assertTrue(result)
+        mock_user_storage.update_user_ip.assert_called_once()
+
+    def test_non_customer_request(self):
+        """skip for non customer request"""
+        req = UserRequest(
+            user_id=999,
+            ip="1.1.1.1",
+            uri="/test-ms/v1/merchant/test-api",
+            method="POST",
+        )
+
+        result = validate_and_update_feature_with_request(req)
+
+        self.assertTrue(result)
