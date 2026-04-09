@@ -34,12 +34,15 @@ class UserRequest:
 
 def validate_and_update_feature_with_request(user_request: UserRequest) -> bool:
     """Validate and update user features based on the incoming request."""
+    valid: bool = True
+    if not _is_customer_reuqest(user_request=user_request):
+        return valid
     try:
         if blacklist_storage.is_blacklisted(user_id=user_request.user_id):
+            valid = not _is_block_request(user_request=user_request)
             logger.warning(
-                f"User {user_request.user_id} is blacklisted. Skipping feature update."
+                f"User {user_request.user_id} is blacklisted. Block: {not valid}"
             )
-            return False
         user_storage.update_user_ip(
             user_id=user_request.user_id, ip_address=user_request.ip
         )
@@ -49,8 +52,23 @@ def validate_and_update_feature_with_request(user_request: UserRequest) -> bool:
             user_request.ip,
         )
     except Exception as e:
-        logger.error(f"Failed to update user {user_request.user_id} IP in Redis: {e}")
-    return True
+        logger.error(
+            f"Failed to chack and update user {user_request.user_id} IP in Redis: {e}"
+        )
+    return valid
+
+
+def _is_customer_reuqest(user_request: UserRequest) -> bool:
+    return "/customer/" in user_request.uri
+
+
+def _is_block_request(user_request: UserRequest) -> bool:
+    return user_request.method.lower() in (
+        "post",
+        "put",
+        "patch",
+        "delete",
+    )
 
 
 def extract_features(user_id: int) -> dict[str, int | float | str]:

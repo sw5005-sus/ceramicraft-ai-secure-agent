@@ -65,7 +65,7 @@ async def verify_user(
     x_real_ip: Optional[str] = Header(None, alias="X-Real-IP"),
 ):
     user_id = x_user_id
-    if user_id is None:
+    if user_id is None or user_id == 0:
         return
 
     client_ip = (
@@ -77,9 +77,6 @@ async def verify_user(
     logger.info(
         f"User: {user_id} | IP: {client_ip} | Method: {method} | URL: {original_url}"
     )
-
-    if not user_id:
-        return
 
     userRequest = UserRequest(
         user_id=int(user_id), ip=client_ip, uri=original_url, method=method
