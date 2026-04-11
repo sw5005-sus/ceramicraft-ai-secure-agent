@@ -7,13 +7,6 @@ from ceramicraft_ai_secure_agent.utils.logger import get_logger
 
 F = TypeVar("F", bound=Callable[..., Any])
 
-
-def get_current_active_span():
-    tracing = getattr(mlflow, "tracing", None)
-    func = getattr(tracing, "get_current_active_span", lambda: None)
-    return func()
-
-
 logger = get_logger(__name__)
 
 MLFLOW_EXPERIMENT_NAME = os.environ.get(
@@ -76,9 +69,6 @@ def safe_update_trace(metadata: dict[str, Any]) -> None:
         return
 
     try:
-        active_span = get_current_active_span()
-        if active_span:
-            for key, value in metadata.items():
-                active_span.set_attribute(key, value)
+        mlflow.update_current_trace(metadata=metadata)
     except Exception as exc:
         logger.warning("Trace metadata update skipped: %s", exc)

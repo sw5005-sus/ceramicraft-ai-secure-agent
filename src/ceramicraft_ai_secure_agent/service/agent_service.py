@@ -156,6 +156,10 @@ def _llm_judge_node(state: _AssessmentState) -> dict[str, Any]:
         return {"recommendation": direct_block_recommendation}
 
     if not need_llm_judgment(state):
+        logger.info(
+            'No significant risk signals. Using "no risk" recommendation for user %s.',
+            state["user_id"],
+        )
         return {"recommendation": no_risk_recommendation.to_json()}
 
     api_key = os.environ.get("OPENAI_API_KEY", "")
@@ -228,7 +232,7 @@ def _update_trace_with_score(state: _AssessmentState) -> None:
     score = state["score_result"]
 
     trace_metadata: dict[str, Any] = {
-        "user_id": state["user_id"],
+        "user_id": str(state["user_id"]),
         "risk_level": score["risk_level"],
         "risk_score": score["risk_score"],
         "fraud_probability": score["fraud_probability"],
@@ -268,7 +272,6 @@ def _build_llm_prompt(state: _AssessmentState) -> str:
 def _get_graph():
     """Build and compile the LangGraph workflow lazily."""
     global _graph
-
     if _graph is not None:
         return _graph
     with _graph_lock:
@@ -353,7 +356,7 @@ def assess_risk(user_id: int) -> dict[str, Any]:
 
     safe_update_trace(
         {
-            "user_id": user_id,
+            "user_id": str(user_id),
             "service": "ai-secure-agent",
             "workflow": "risk_assessment_graph",
             "prompt_name": PROMPT_NAME,

@@ -4,6 +4,17 @@ import logging
 import sys
 
 
+class OTelContextDefaultsFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        if not hasattr(record, "otelTraceID"):
+            record.otelTraceID = "-"
+        if not hasattr(record, "otelSpanID"):
+            record.otelSpanID = "-"
+        if not hasattr(record, "otelTraceSampled"):
+            record.otelTraceSampled = False
+        return True
+
+
 def get_logger(name: str) -> logging.Logger:
     """Return a configured logger for the given module name."""
     logger = logging.getLogger(name)
@@ -13,9 +24,8 @@ def get_logger(name: str) -> logging.Logger:
         formatter = logging.Formatter(
             fmt=(
                 "%(asctime)s %(levelname)s [%(name)s] "
-                "[service_name=ai-secure-agent-ms] "
-                # "[trace_id=%(trace_id)s] - %(message)s"
-                " - %(message)s"
+                "[trace_id=%(otelTraceID)s span_id=%(otelSpanID)s] "
+                "- %(message)s"
             ),
             datefmt="%Y-%m-%dT%H:%M:%S",
         )
