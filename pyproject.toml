@@ -21,6 +21,12 @@ dependencies = [
     "mlflow-skinny>=3.11.1",
     "aiokafka>=0.11.0",
     "setuptools<82",
+    "opentelemetry-sdk>=1.40.0",
+    "opentelemetry-exporter-otlp>=1.40.0",
+    "opentelemetry-distro>=0.61b0",
+    "opentelemetry-instrumentation-logging>=0.61b0",
+    "opentelemetry-instrumentation-fastapi>=0.61b0",
+    "opentelemetry-instrumentation-aiokafka>=0.61b0",
 ]
 
 [dependency-groups]

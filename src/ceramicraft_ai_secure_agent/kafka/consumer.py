@@ -45,7 +45,8 @@ async def consume():
 
                 logger.info(
                     f"Message received: Key={key}, Topic={msg.topic}, "
-                    f"Partition={msg.partition}, Offset={msg.offset}"
+                    f"Partition={msg.partition}, Offset={msg.offset},"
+                    f"Message={value}"
                 )
 
                 handler = topic2handler.get(msg.topic)
