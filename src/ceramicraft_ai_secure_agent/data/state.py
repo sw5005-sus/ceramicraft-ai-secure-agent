@@ -12,7 +12,7 @@ class AssessmentState(TypedDict):
     """Mutable state passed between LangGraph nodes."""
 
     user_id: int
-    features: dict[str, int | float]
+    features: dict[str, int | float | str]
     rule_result: dict[str, Any]
     ml_result: dict[str, Any]
     score_result: dict[str, Any]
@@ -34,9 +34,7 @@ def build_risk_user_review_from_state(state: AssessmentState) -> RiskUserReview:
         rule_score=state["rule_result"].get("rule_score", 0.0),
         fraud_probability=state["ml_result"].get("fraud_probability", 0.0),
         triggered_rules=score.get("triggered_rules", []),
-        decision_source=(
-            "LLM" if recommendation.reason != "LLM unavailable" else "SystemRule"
-        ),
+        decision_source=recommendation.decision_maker,
     )
 
 
@@ -49,11 +47,13 @@ class Recommendation:
         reason: str,
         analyst_summary: str,
         confidence: str,
+        decision_maker: str = "LLM",
     ) -> None:
         self.recommended_action = recommended_action
         self.reason = reason
         self.analyst_summary = analyst_summary
         self.confidence = confidence
+        self.decision_maker = decision_maker
 
     @classmethod
     def from_json(cls, json_str: str) -> "Recommendation":
@@ -62,14 +62,32 @@ class Recommendation:
             return fallback_return
         try:
             data = json.loads(json_str)
-            return cls(
+            ret = cls(
                 recommended_action=data["recommended_action"],
                 reason=data["reason"],
                 analyst_summary=data["analyst_summary"],
                 confidence=data["confidence"],
             )
+            if ret.is_valid():
+                return ret
+            else:
+                return fallback_return
         except (json.JSONDecodeError, KeyError, TypeError):
             return fallback_return
+
+    def is_valid(self) -> bool:
+        """Check if the recommendation has valid fields."""
+        valid_actions = {"allow", "block", "manual_review", "watchlist"}
+        valid_confidences = {"low", "medium", "high"}
+
+        return (
+            self.recommended_action in valid_actions
+            and self.confidence in valid_confidences
+            and isinstance(self.analyst_summary, str)
+            and len(self.analyst_summary) > 0
+            and isinstance(self.reason, str)
+            and len(self.reason) > 0
+        )
 
     def to_json(self) -> str:
         """Serialize to a JSON string."""
@@ -81,6 +99,7 @@ no_risk_recommendation = Recommendation(
     "Low risk score and no triggered rules",
     "Legitimate transaction: low risk, no rules triggered.",
     "high",
+    "SYSTEM_RULE",
 )
 
 fallback_return = Recommendation(
@@ -88,6 +107,7 @@ fallback_return = Recommendation(
     reason="LLM unavailable",
     analyst_summary="LLM API key not set. Defaulting to manual review.",
     confidence="low",
+    decision_maker="LLM_FALLBACK",
 )
 
 analyst_msg = (
@@ -101,4 +121,5 @@ direct_block_recommendation = Recommendation(
     reason="High risk score and/or triggered rules",
     analyst_summary=analyst_msg,
     confidence="high",
+    decision_maker="SYSTEM_RULE",
 ).to_json()

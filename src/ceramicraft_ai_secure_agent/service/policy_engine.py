@@ -52,15 +52,15 @@ def should_block_directly(state: Assessment) -> bool:
     if (
         "high_order_count_last_1h" in triggered_rules
         and "multiple_unique_ips" in triggered_rules
-        and order_1h >= SCENARIO_ORDER_COUNT_BURST
+        and float(order_1h) >= SCENARIO_ORDER_COUNT_BURST
     ):
         return True
 
     # 4. case: new account with many orders
     account_age = features.get("account_age_days", 0)
     if (
-        account_age <= SCENARIO_NEW_ACCOUNT_DAYS
-        and order_1h >= SCENARIO_NEW_ACCOUNT_ORDER_LIMIT
+        float(account_age) <= SCENARIO_NEW_ACCOUNT_DAYS
+        and float(order_1h) >= SCENARIO_NEW_ACCOUNT_ORDER_LIMIT
     ):
         return True
 
@@ -68,8 +68,8 @@ def should_block_directly(state: Assessment) -> bool:
     ip_count = features.get("unique_ip_count", 0)
     addr_count = features.get("receive_address_count", 0)
     if (
-        addr_count >= SCENARIO_ANOMALY_ADDR_COUNT
-        and ip_count >= SCENARIO_ANOMALY_IP_COUNT
+        float(addr_count) >= SCENARIO_ANOMALY_ADDR_COUNT
+        and float(ip_count) >= SCENARIO_ANOMALY_IP_COUNT
     ):
         return True
 

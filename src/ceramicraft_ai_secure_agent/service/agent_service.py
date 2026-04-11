@@ -20,6 +20,7 @@ from typing import Any, TypeVar, cast
 
 from langchain_openai import ChatOpenAI
 
+from ceramicraft_ai_secure_agent.data.feature_columns import FEATURE_COLUMNS
 from ceramicraft_ai_secure_agent.data.state import (
     AssessmentState as _AssessmentState,
 )
@@ -116,6 +117,7 @@ def _get_loaded_prompt() -> str:
 # ---------------------------------------------------------------------------
 
 
+@trace(name="extract_features_node")
 def _extract_features_node(state: _AssessmentState) -> dict[str, Any]:
     """Node: extract features from the raw input."""
     tool_input = cast(Any, {"user_id": state["user_id"]})
@@ -123,18 +125,21 @@ def _extract_features_node(state: _AssessmentState) -> dict[str, Any]:
     return {"features": res}
 
 
+@trace(name="evaluate_rules_node")
 def _evaluate_rules_node(state: _AssessmentState) -> dict[str, Any]:
     """Node: apply business rules to the feature set."""
     res = evaluate_rules_tool.invoke({"features": state["features"]})
     return {"rule_result": res}
 
 
+@trace(name="predict_node")
 def _predict_node(state: _AssessmentState) -> dict[str, Any]:
     """Node: run the ML model on the feature set."""
     res = predict_tool.invoke({"features": state["features"]})
     return {"ml_result": res}
 
 
+@trace(name="compute_score_node")
 def _compute_score_node(state: _AssessmentState) -> dict[str, Any]:
     """Node: combine rule and ML signals into a composite risk score."""
     score_result = risk_scoring.compute_score(state["rule_result"], state["ml_result"])
@@ -172,8 +177,12 @@ def _llm_judge_node(state: _AssessmentState) -> dict[str, Any]:
     _update_trace_with_score(state)
     prompt = _build_llm_prompt(state)
     llm = _get_llm()
-    response = llm.invoke(prompt)
-    return {"recommendation": response.content}
+    try:
+        response = llm.invoke(prompt)
+        return {"recommendation": Recommendation.from_json(str(response.content))}
+    except Exception as e:
+        logger.error(f"LLM invocation failed: {e}. Using fallback recommendation.")
+        return {"recommendation": fallback_return.to_json()}
 
 
 class Action:
@@ -220,7 +229,7 @@ def _action_node(state: _AssessmentState) -> dict[str, Any]:
     recommendation = state["recommendation"]
     logger.info("Executing action based on recommendation: %s", recommendation)
     action_key = Recommendation.from_json(recommendation).recommended_action.lower()
-    action = action_map.get(action_key, AllowAction())
+    action = action_map.get(action_key, ManualReviewAction())
     user_id = state["user_id"]
     user_last_status_storage.set_user_last_status(user_id, action_key)
     action.run(state)
@@ -251,7 +260,11 @@ def _build_llm_prompt(state: _AssessmentState) -> str:
     triggered = (
         ", ".join(score["triggered_rules"]) if score["triggered_rules"] else "none"
     )
-    feature_snapshot = state["features"] if state["features"] else "N/A"
+    filtered_features = {
+        key: state["features"][key]
+        for key in FEATURE_COLUMNS
+        if key in state["features"]
+    }
 
     prompt_template = _get_loaded_prompt()
     return prompt_template.format(
@@ -259,8 +272,8 @@ def _build_llm_prompt(state: _AssessmentState) -> str:
         risk_level=score["risk_level"],
         triggered_rules=triggered,
         fraud_probability=f"{score['fraud_probability']:.4f}",
-        previous_status="N/A",  # todo read from redis
-        feature_snapshot=feature_snapshot,
+        previous_status=state["features"]["last_status"],
+        feature_snapshot=filtered_features,
     )
 
 
@@ -290,6 +303,7 @@ def _get_graph():
         builder.set_entry_point("extract_features")
         builder.add_edge("extract_features", "evaluate_rules")
         builder.add_edge("extract_features", "predict")
+        builder.add_edge("evaluate_rules", "compute_score")
         builder.add_edge("predict", "compute_score")
         builder.add_edge("compute_score", "llm_judge")
         builder.add_edge("llm_judge", "execute_action")
@@ -307,7 +321,9 @@ def _get_llm() -> ChatOpenAI:
 
     with _llm_lock:
         if _llm is None:
-            _llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0)
+            _llm = ChatOpenAI(
+                model_name="gpt-4o-mini", temperature=0, request_timeout=5
+            )
         return _llm
 
 
@@ -332,11 +348,11 @@ def assess_risk(user_id: int) -> dict[str, Any]:
     """Run the complete risk-assessment pipeline for a transaction.
 
     The pipeline is implemented as a LangGraph StateGraph:
-      1. ``extract_features`` – convert raw fields to numeric features.
-      2. ``evaluate_rules``   – apply hard-coded business rules.
-      3. ``predict``          – run the ML fraud-detection model.
-      4. ``compute_score``    – combine signals into a composite score.
-      5. ``llm_judge``        – use an LLM to generate a recommendation.
+      1. ``extract_features`` - convert raw fields to numeric features.
+      2. ``evaluate_rules``   - apply hard-coded business rules.
+      3. ``predict``          - run the ML fraud-detection model.
+      4. ``compute_score``    - combine signals into a composite score.
+      5. ``llm_judge``        - use an LLM to generate a recommendation.
 
     Args:
         transaction: Raw transaction payload.
