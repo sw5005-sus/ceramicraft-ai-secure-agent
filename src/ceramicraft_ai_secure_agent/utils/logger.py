@@ -11,7 +11,12 @@ def get_logger(name: str) -> logging.Logger:
     if not logger.handlers:
         handler = logging.StreamHandler(sys.stdout)
         formatter = logging.Formatter(
-            fmt="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            fmt=(
+                "%(asctime)s %(levelname)s [%(name)s] "
+                "[service_name=ai-secure-agent-ms] "
+                # "[trace_id=%(trace_id)s] - %(message)s"
+                " - %(message)s"
+            ),
             datefmt="%Y-%m-%dT%H:%M:%S",
         )
         handler.setFormatter(formatter)

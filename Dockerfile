@@ -29,7 +29,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PATH="/app/.venv/bin:$PATH"
 
 RUN apk update && \
-    apk upgrade --no-cache zlib && \
+    apk upgrade --no-cache \
+    zlib \
+    libcrypto3 \
+    libssl3 && \
     apk add --no-cache curl && \
     rm -rf /var/cache/apk/*
 
@@ -46,4 +49,4 @@ ENV MLFLOW_SERVER_JOB_ALLOWLIST=""
 
 USER appuser
 EXPOSE 8080
-CMD ["python", "-m", "ceramicraft_ai_secure_agent.app"]
+CMD ["opentelemetry-instrument", "python", "-m", "ceramicraft_ai_secure_agent.app"]
