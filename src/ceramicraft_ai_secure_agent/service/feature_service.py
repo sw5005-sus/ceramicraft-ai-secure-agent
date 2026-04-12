@@ -84,47 +84,46 @@ def extract_features(user_id: int) -> dict[str, int | float | str]:
     last_day = int(datetime.now().timestamp() - 24 * 3600)
     now = int(datetime.now().timestamp())
 
-    with feature_executor as executor:
-        features = {
-            "order_count_last_1h": executor.submit(
-                order_storage.count_order_by_time,
-                user_id=user_id,
-                start_time=last_hour,
-                end_time=now,
-            ),
-            "order_count_last_24h": executor.submit(
-                order_storage.count_order_by_time,
-                user_id=user_id,
-                start_time=last_day,
-                end_time=now,
-            ),
-            "unique_ip_count": executor.submit(
-                user_storage.count_user_ip, user_id=user_id
-            ),
-            "avg_order_amount_global": executor.submit(
-                _get_avg_order_amount, user_id=user_id
-            ),
-            "avg_order_amount_today": executor.submit(
-                _get_avg_order_amount_today, user_id=user_id
-            ),
-            "account_age_days": executor.submit(
-                lambda: math.ceil(
-                    (
-                        datetime.now().timestamp()
-                        - user_storage.get_user_register_time(user_id=user_id)
-                    )
-                    / (24 * 3600)
+    features = {
+        "order_count_last_1h": feature_executor.submit(
+            order_storage.count_order_by_time,
+            user_id=user_id,
+            start_time=last_hour,
+            end_time=now,
+        ),
+        "order_count_last_24h": feature_executor.submit(
+            order_storage.count_order_by_time,
+            user_id=user_id,
+            start_time=last_day,
+            end_time=now,
+        ),
+        "unique_ip_count": feature_executor.submit(
+            user_storage.count_user_ip, user_id=user_id
+        ),
+        "avg_order_amount_global": feature_executor.submit(
+            _get_avg_order_amount, user_id=user_id
+        ),
+        "avg_order_amount_today": feature_executor.submit(
+            _get_avg_order_amount_today, user_id=user_id
+        ),
+        "account_age_days": feature_executor.submit(
+            lambda: math.ceil(
+                (
+                    datetime.now().timestamp()
+                    - user_storage.get_user_register_time(user_id=user_id)
                 )
-            ),
-            "receive_address_count": executor.submit(
-                order_storage.count_user_receiver_address, user_id=user_id
-            ),
-            "last_status": executor.submit(
-                user_last_status_storage.get_user_last_status, user_id=user_id
-            ),
-        }
+                / (24 * 3600)
+            )
+        ),
+        "receive_address_count": feature_executor.submit(
+            order_storage.count_user_receiver_address, user_id=user_id
+        ),
+        "last_status": feature_executor.submit(
+            user_last_status_storage.get_user_last_status, user_id=user_id
+        ),
+    }
 
-        results = {k: v.result() for k, v in features.items()}
+    results = {k: v.result() for k, v in features.items()}
 
     logger.debug(f"Extracted features for user {user_id}: {results}")
     return results
