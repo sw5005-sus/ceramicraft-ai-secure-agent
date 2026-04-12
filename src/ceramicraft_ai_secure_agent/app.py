@@ -15,6 +15,8 @@ from ceramicraft_ai_secure_agent.service.feature_service import (
     validate_and_update_feature_with_request,
 )
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
 
 logger = get_logger(__name__)
 
@@ -50,6 +52,7 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+FastAPIInstrumentor.instrument_app(app)
 
 
 @app.get("/ai-secure-agent-ms/v1/ping", tags=["Health"])
