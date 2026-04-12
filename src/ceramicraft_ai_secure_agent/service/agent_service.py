@@ -179,7 +179,7 @@ def _llm_judge_node(state: _AssessmentState) -> dict[str, Any]:
     llm = _get_llm()
     try:
         response = llm.invoke(prompt)
-        return {"recommendation": Recommendation.from_json(str(response.content))}
+        return {"recommendation": str(response.content)}
     except Exception as e:
         logger.error(f"LLM invocation failed: {e}. Using fallback recommendation.")
         return {"recommendation": fallback_return.to_json()}
@@ -272,7 +272,7 @@ def _build_llm_prompt(state: _AssessmentState) -> str:
         risk_level=score["risk_level"],
         triggered_rules=triggered,
         fraud_probability=f"{score['fraud_probability']:.4f}",
-        previous_status=state["features"]["last_status"],
+        previous_status=state["features"].get("last_status", "N/A"),
         feature_snapshot=filtered_features,
     )
 

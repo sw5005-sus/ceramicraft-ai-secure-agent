@@ -24,7 +24,11 @@ sys.modules["ceramicraft_ai_secure_agent.mysqlcli.risk_user_review_storage"] = (
 # --- 2. 导入被测模块 ---
 # 注意：一定要在上面的 mock 注入后再导入
 import ceramicraft_ai_secure_agent.service.agent_service as agent_service  # noqa: E402
-from ceramicraft_ai_secure_agent.service.agent_service import (  # noqa: E402
+from ceramicraft_ai_secure_agent.service.agent_service import (  # noqa: E402  # noqa: E402
+    AllowAction,
+    BlockAction,
+    ManualReviewAction,
+    WatchlistAction,
     _AssessmentState,
 )
 
@@ -138,6 +142,50 @@ class TestAgentService(unittest.TestCase):
 
         self.assertIn("manual_review", res["recommendation"])
         self.assertIn("LLM unavailable", res["recommendation"])
+
+    @patch("ceramicraft_ai_secure_agent.service.agent_service.should_block_directly")
+    def test_llm_node_block_directly(self, mock_should_block_directly):
+        """测试 LLM Judge Node 中直接 Block 的逻辑分支"""
+        state: _AssessmentState = {
+            "user_id": 1,
+            "features": {"last_status": "allow", "order_count_last_1h": 15},
+            "rule_result": {
+                "hits": ["high_order_count_last_1h", "multiple_unique_ips"],
+                "rule_score": 0.8,
+            },
+            "ml_result": {"fraud_probability": 0.85},
+            "score_result": {
+                "risk_score": 0.9,
+                "risk_level": "HIGH",
+                "triggered_rules": ["high_order_count_last_1h", "multiple_unique_ips"],
+            },
+            "recommendation": "pending",
+        }
+        mock_should_block_directly.return_value = True
+
+        res = agent_service._llm_judge_node(state)
+
+        self.assertIn("block", res["recommendation"])
+
+    @patch("ceramicraft_ai_secure_agent.service.agent_service.need_llm_judgment")
+    def test_llm_node_no_need_judgement(self, mock_need_llm_judgment):
+        """测试 LLM Judge Node 中不需要 LLM 判断的分支"""
+        state: _AssessmentState = {
+            "user_id": 1,
+            "features": {"last_status": "allow"},
+            "rule_result": {"hits": [], "rule_score": 0.1},
+            "ml_result": {"fraud_probability": 0.1},
+            "score_result": {
+                "risk_score": 0.1,
+                "risk_level": "LOW",
+                "triggered_rules": [],
+            },
+            "recommendation": "pending",
+        }
+        mock_need_llm_judgment.return_value = False
+        res = agent_service._llm_judge_node(state)
+
+        self.assertIn("allow", res["recommendation"])
 
     @patch("ceramicraft_ai_secure_agent.service.agent_service.user_last_status_storage")
     @patch("ceramicraft_ai_secure_agent.service.agent_service.BlockAction.run")
@@ -385,6 +433,78 @@ class TestAgentService(unittest.TestCase):
         )
 
         self.assertEqual(prompt, expected_prompt)
+
+    @patch("ceramicraft_ai_secure_agent.service.agent_service.create_risk_user_review")
+    @patch(
+        "ceramicraft_ai_secure_agent.service.agent_service.blacklist_storage.add_blacklist"
+    )
+    def test_block_action_run(self, mock_add_blacklist, mock_create_risk_user_review):
+        """Test the run method of BlockAction."""
+        user_id = 777
+        state: _AssessmentState = {
+            "user_id": user_id,
+            "features": {},
+            "rule_result": {},
+            "ml_result": {},
+            "score_result": {},
+            "recommendation": "",
+        }
+        action = BlockAction()
+        action.run(state)
+
+        mock_add_blacklist.assert_called_once_with(user_id=777)
+        mock_create_risk_user_review.assert_called_once()
+
+    @patch("ceramicraft_ai_secure_agent.service.agent_service.create_risk_user_review")
+    def test_manual_review_action_run(self, mock_create_risk_user_review):
+        """Test the run method of ManualReviewAction."""
+        state = _AssessmentState(
+            user_id=888,
+            features={},
+            rule_result={},
+            ml_result={},
+            score_result={},
+            recommendation="",
+        )
+        action = ManualReviewAction()
+        action.run(state)
+
+        mock_create_risk_user_review.assert_called_once()
+
+    @patch("ceramicraft_ai_secure_agent.service.agent_service.create_risk_user_review")
+    @patch(
+        "ceramicraft_ai_secure_agent.service.agent_service.watchlist_storage.add_watchlist"
+    )
+    def test_watchlist_action_run(
+        self, mock_add_watchlist, mock_create_risk_user_review
+    ):
+        """Test the run method of WatchlistAction."""
+        state = _AssessmentState(
+            user_id=999,
+            features={},
+            rule_result={},
+            ml_result={},
+            score_result={},
+            recommendation="",
+        )
+        action = WatchlistAction()
+        action.run(state)
+
+        mock_add_watchlist.assert_called_once_with(user_id=999)
+        mock_create_risk_user_review.assert_called_once()
+
+    def test_allow_action_run(self):
+        """Test the run method of AllowAction."""
+        state = _AssessmentState(
+            user_id=1000,
+            features={},
+            rule_result={},
+            ml_result={},
+            score_result={},
+            recommendation="",
+        )
+        action = AllowAction()
+        action.run(state)  # Should not raise any exceptions
 
 
 if __name__ == "__main__":

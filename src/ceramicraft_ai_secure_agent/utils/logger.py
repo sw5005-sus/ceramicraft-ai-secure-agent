@@ -21,6 +21,7 @@ def get_logger(name: str) -> logging.Logger:
 
     if not logger.handlers:
         handler = logging.StreamHandler(sys.stdout)
+        handler.addFilter(OTelContextDefaultsFilter())
         formatter = logging.Formatter(
             fmt=(
                 "%(asctime)s %(levelname)s [%(name)s] "

@@ -34,7 +34,7 @@
             "recommended_action": "allow|watchlist|manual_review|block",
             "reason": "brief summary of key signals (max 20 words)",
             "analyst_summary": "brief 1-2 sentence explanation for a human analyst",
-            "confidence": "low|medium|high"
+            "confidence": "low|medium|high",
             "evidence": ["short evidence item", "short evidence item", "short evidence item"]
         }}
         Do not return markdown. Do not add extra text."

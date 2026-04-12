@@ -81,8 +81,8 @@ class Recommendation:
         valid_confidences = {"low", "medium", "high"}
 
         return (
-            self.recommended_action in valid_actions
-            and self.confidence in valid_confidences
+            self.recommended_action.lower() in valid_actions
+            and self.confidence.lower() in valid_confidences
             and isinstance(self.analyst_summary, str)
             and len(self.analyst_summary) > 0
             and isinstance(self.reason, str)

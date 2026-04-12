@@ -1,0 +1,47 @@
+name: DeepEval LLM Evaluation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'deepeval/**'
+      - 'pyproject.toml'
+      - 'requirements*.txt'
+      - '.github/workflows/deepeval-ci.yml'
+  workflow_dispatch:
+
+env:
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  PYTHONPATH: src
+
+jobs:
+  deepeval:
+    name: Run DeepEval test_llm_judge
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          uv sync --dev
+
+      - name: Verify OpenAI API key is set
+        run: |
+          if [ -z "${OPENAI_API_KEY}" ]; then
+            echo "OPENAI_API_KEY is not set."
+            exit 1
+          fi
+
+      - name: Run DeepEval test_llm_judge
+        run: |
+          PYTHONPATH=src uv run deepeval test run deepeval/test_llm_judge.py -v
