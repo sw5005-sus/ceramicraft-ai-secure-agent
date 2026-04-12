@@ -7,6 +7,7 @@ import contextlib
 from typing import Optional
 
 from fastapi import FastAPI, Header, HTTPException, Request
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
 from ceramicraft_ai_secure_agent.config.config import get_config
 from ceramicraft_ai_secure_agent.kafka.consumer import consume
@@ -15,8 +16,6 @@ from ceramicraft_ai_secure_agent.service.feature_service import (
     validate_and_update_feature_with_request,
 )
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-
 
 logger = get_logger(__name__)
 
