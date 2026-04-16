@@ -14,11 +14,8 @@ try:
     DEMO_HTML = DEMO_HTML_PATH.read_text(encoding="utf-8")
 except FileNotFoundError:
     DEMO_HTML = "<html><body><h1>Demo page unavailable</h1></body></html>"
-except OSError as error:
-    error_name = error.__class__.__name__
-    DEMO_HTML = (
-        f"<html><body><h1>Demo page unavailable</h1><p>{error_name}</p></body></html>"
-    )
+except OSError:
+    DEMO_HTML = "<html><body><h1>Demo page unavailable</h1></body></html>"
 
 
 class OpType(str, Enum):
