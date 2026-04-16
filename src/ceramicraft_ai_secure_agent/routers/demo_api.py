@@ -10,12 +10,13 @@ router = APIRouter(
 )
 
 DEMO_HTML_PATH = Path(__file__).parent / "demo_page.html"
+DEMO_HTML_FALLBACK = "<html><body><h1>Demo page unavailable</h1></body></html>"
 try:
     DEMO_HTML = DEMO_HTML_PATH.read_text(encoding="utf-8")
 except FileNotFoundError:
-    DEMO_HTML = "<html><body><h1>Demo page unavailable</h1></body></html>"
+    DEMO_HTML = DEMO_HTML_FALLBACK
 except OSError:
-    DEMO_HTML = "<html><body><h1>Demo page unavailable</h1></body></html>"
+    DEMO_HTML = DEMO_HTML_FALLBACK
 
 
 class OpType(str, Enum):
