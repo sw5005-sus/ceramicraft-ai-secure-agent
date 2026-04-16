@@ -57,6 +57,6 @@ def risk_access(user_id: int):
 
 
 @router.get("/page", response_class=HTMLResponse)
-def demo_page():
+def demo_page() -> str:
     """Interactive HTML page for demo APIs."""
-    return HTMLResponse(content=DEMO_HTML)
+    return DEMO_HTML
