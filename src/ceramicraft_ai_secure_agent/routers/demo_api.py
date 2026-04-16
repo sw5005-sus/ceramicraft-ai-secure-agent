@@ -17,7 +17,7 @@ class OpType(str, Enum):
 
 
 @router.post("/mock-data")
-async def gen_mock_data(user_id: int, op_type: OpType):
+def gen_mock_data(user_id: int, op_type: OpType):
     """Generate mock data for testing."""
     import ceramicraft_ai_secure_agent.mock.gen_mock_data as gen_mock_data
     from ceramicraft_ai_secure_agent.service.feature_service import extract_features
@@ -36,8 +36,8 @@ async def gen_mock_data(user_id: int, op_type: OpType):
 
 
 @router.post("/risk-access")
-async def risk_access(user_id: int):
-    """Clear mock data for testing."""
+def risk_access(user_id: int):
+    """Assess risk for the specified user."""
     from ceramicraft_ai_secure_agent.service.agent_service import assess_risk
 
     return assess_risk(user_id=user_id)

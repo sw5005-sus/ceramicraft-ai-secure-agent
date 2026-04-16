@@ -1,3 +1,4 @@
+import functools
 import time
 
 from opentelemetry import metrics
@@ -10,6 +11,7 @@ def metric_timed(name: str):
     duration = meter.create_histogram(f"{name}_duration_ms", unit="ms")
 
     def decorator(func):
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
             start = time.perf_counter()
             counter.add(1)

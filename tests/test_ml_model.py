@@ -122,7 +122,7 @@ class TestMLModel(unittest.TestCase):
             {
                 "fraud_probability": 0.8,
                 "prediction": 1,
-                "explaination": [],
+                "explanation": [],
             },
         )
 
@@ -141,7 +141,7 @@ class TestMLModel(unittest.TestCase):
             {
                 "fraud_probability": 0.3,
                 "prediction": 0,
-                "explaination": [],
+                "explanation": [],
             },
         )
 

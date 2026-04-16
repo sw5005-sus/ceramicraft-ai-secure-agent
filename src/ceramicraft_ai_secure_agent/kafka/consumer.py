@@ -166,7 +166,11 @@ async def consume():
     try:
         async for msg in consumer:
             extracted_ctx = propagate.extract(msg.headers, getter=headers_getter)
-            lag = max(0, int(time.time() * 1000) - msg.timestamp)
+            lag = (
+                0
+                if msg.timestamp is None
+                else max(0, int(time.time() * 1000) - msg.timestamp)
+            )
 
             with tracer.start_as_current_span(
                 name=f"{msg.topic} receive",

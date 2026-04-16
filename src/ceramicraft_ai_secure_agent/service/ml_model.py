@@ -107,7 +107,7 @@ def predict(features: dict[str, Any]) -> dict[str, Any]:
         return {
             "fraud_probability": prob,
             "prediction": 1 if prob >= 0.5 else 0,
-            "explaination": explanation,
+            "explanation": explanation,
         }
     except Exception as e:
         logger.error(f"ML Prediction failed: {str(e)}")
@@ -124,6 +124,6 @@ def predict_tool(features: dict) -> dict:
 
     Returns:
         Dictionary with ``fraud_probability`` (float in [0, 1]) and
-        ``prediction`` (int: 1 = fraud, 0 = legitimate).
+        ``prediction`` (int: 1 = fraud, 0 = legitimate), ``explanation`` (list).
     """
     return predict(features)
