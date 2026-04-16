@@ -10,7 +10,10 @@ router = APIRouter(
 )
 
 DEMO_HTML_PATH = Path(__file__).parent / "demo_page.html"
-DEMO_HTML = DEMO_HTML_PATH.read_text(encoding="utf-8")
+try:
+    DEMO_HTML = DEMO_HTML_PATH.read_text(encoding="utf-8")
+except OSError:
+    DEMO_HTML = "<html><body><h1>Demo page unavailable</h1></body></html>"
 
 
 class OpType(str, Enum):
