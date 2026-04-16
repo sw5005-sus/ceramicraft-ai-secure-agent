@@ -5,7 +5,7 @@ from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 
 router = APIRouter(
-    prefix="/demo",
+    prefix="/ai-secure-agent/v1/demo",
     tags=["demo", "mock"],
 )
 

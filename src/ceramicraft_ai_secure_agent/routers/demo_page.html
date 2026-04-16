@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Demo API 交互页</title>
+    <title>Demo API Interactive Page</title>
     <style>
       body {
         font-family: Arial, sans-serif;
@@ -63,10 +63,28 @@
         background: #f8fafc;
         border: 1px solid #e2e8f0;
       }
-      pre {
-        margin: 0;
-        white-space: pre-wrap;
-        word-break: break-word;
+      .result {
+        margin-top: 10px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: #fff;
+      }
+      th,
+      td {
+        border: 1px solid #dbe3ee;
+        padding: 8px 10px;
+        text-align: left;
+        font-size: 13px;
+      }
+      th {
+        background: #f1f5f9;
+        color: #1f2937;
+      }
+      .empty {
+        color: #64748b;
+        font-size: 13px;
       }
       .status {
         font-size: 13px;
@@ -80,8 +98,11 @@
   </head>
   <body>
     <div class="container">
-      <h1>Demo API 交互页面</h1>
-      <p>流程：先生成 Mock 数据并查看 Feature，确认后再进行风险评估。</p>
+      <h1>Demo API Interactive Page</h1>
+      <p>
+        Flow: generate mock data and review features first, then run risk
+        assessment.
+      </p>
 
       <div class="row">
         <div class="field">
@@ -89,7 +110,7 @@
           <input id="userId" type="number" min="1" value="1001" />
         </div>
         <div class="field">
-          <label for="opType">Mock 类型</label>
+          <label for="opType">Mock Type</label>
           <select id="opType">
             <option value="normal">normal</option>
             <option value="block">block</option>
@@ -101,22 +122,22 @@
       </div>
 
       <div class="row">
-        <button id="mockBtn">1) 生成 Mock 并提取 Feature</button>
+        <button id="mockBtn">1) Generate Mock Data and Extract Features</button>
         <button id="riskBtn" class="secondary" disabled>
-          2) 确认 Feature 后评估风险
+          2) Run Risk Assessment After Confirming Features
         </button>
       </div>
 
       <div class="status" id="status"></div>
 
       <div class="panel">
-        <strong>Feature 结果</strong>
-        <pre id="featureResult">暂无数据</pre>
+        <strong>Feature Result</strong>
+        <div id="featureResult" class="result empty">No data yet.</div>
       </div>
 
       <div class="panel">
-        <strong>风险评估结果</strong>
-        <pre id="riskResult">暂无数据</pre>
+        <strong>Risk Assessment Result</strong>
+        <div id="riskResult" class="result empty">No data yet.</div>
       </div>
     </div>
 
@@ -134,12 +155,78 @@
         statusEl.className = isError ? "status error" : "status";
       }
 
+      function formatValue(value) {
+        if (value === null || value === undefined) {
+          return "-";
+        }
+        if (typeof value === "object") {
+          return JSON.stringify(value);
+        }
+        return String(value);
+      }
+
+      function toRows(data) {
+        if (Array.isArray(data)) {
+          return data.map((item, index) => ({
+            index: index + 1,
+            value: item,
+          }));
+        }
+        if (data && typeof data === "object") {
+          return Object.entries(data).map(([key, value]) => ({ key, value }));
+        }
+        return [{ value: data }];
+      }
+
+      function renderTable(target, data) {
+        target.innerHTML = "";
+        target.className = "result";
+
+        const rows = toRows(data);
+        if (rows.length === 0) {
+          target.textContent = "No data returned.";
+          target.className = "result empty";
+          return;
+        }
+
+        const table = document.createElement("table");
+        const thead = document.createElement("thead");
+        const tbody = document.createElement("tbody");
+        const headerRow = document.createElement("tr");
+        const columns = Object.keys(rows[0]);
+
+        columns.forEach((column) => {
+          const th = document.createElement("th");
+          th.textContent = column;
+          headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+
+        rows.forEach((row) => {
+          const tr = document.createElement("tr");
+          columns.forEach((column) => {
+            const td = document.createElement("td");
+            td.textContent = formatValue(row[column]);
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+
+        table.appendChild(thead);
+        table.appendChild(tbody);
+        target.appendChild(table);
+      }
+
+      function resetResult(target) {
+        target.textContent = "No data yet.";
+        target.className = "result empty";
+      }
+
       async function requestJson(url, options = {}) {
         const res = await fetch(url, options);
         const data = await res.json();
         if (!res.ok) {
-          const message =
-            data?.detail || data?.message || "请求失败，请稍后重试。";
+          const message = data?.detail || data?.message || "Request failed. Please try again.";
           throw new Error(message);
         }
         return data;
@@ -150,13 +237,13 @@
         const opType = document.getElementById("opType").value;
 
         if (!userId) {
-          setStatus("请先输入 user_id", true);
+          setStatus("Please enter user_id first.", true);
           return;
         }
 
-        setStatus("正在生成 Mock 数据并提取 Feature...");
+        setStatus("Generating mock data and extracting features...");
         riskBtn.disabled = true;
-        riskResult.textContent = "暂无数据";
+        resetResult(riskResult);
 
         try {
           const query = new URLSearchParams({
@@ -164,38 +251,40 @@
             op_type: opType,
           });
           const data = await requestJson(
-            `/demo/mock-data?${query.toString()}`,
+            `/ai-secure-agent/v1/demo/mock-data?${query.toString()}`,
             { method: "POST" },
           );
-          featureResult.textContent = JSON.stringify(data, null, 2);
+          renderTable(featureResult, data);
           confirmedUserId = userId;
           riskBtn.disabled = false;
-          setStatus("Feature 已生成，请确认后点击风险评估。");
+          setStatus("Features generated. Review them before running risk assessment.");
         } catch (error) {
-          featureResult.textContent = "请求失败";
-          setStatus(`生成失败: ${error.message}`, true);
+          featureResult.textContent = "Request failed.";
+          featureResult.className = "result empty";
+          setStatus(`Generation failed: ${error.message}`, true);
         }
       });
 
       riskBtn.addEventListener("click", async () => {
         if (!confirmedUserId) {
-          setStatus("请先生成并确认 Feature", true);
+          setStatus("Please generate and confirm features first.", true);
           return;
         }
 
-        setStatus("正在进行风险评估...");
+        setStatus("Running risk assessment...");
 
         try {
           const query = new URLSearchParams({ user_id: confirmedUserId });
           const data = await requestJson(
-            `/demo/risk-access?${query.toString()}`,
+            `/ai-secure-agent/v1/demo/risk-access?${query.toString()}`,
             { method: "POST" },
           );
-          riskResult.textContent = JSON.stringify(data, null, 2);
-          setStatus("风险评估完成。");
+          renderTable(riskResult, data);
+          setStatus("Risk assessment completed.");
         } catch (error) {
-          riskResult.textContent = "请求失败";
-          setStatus(`评估失败: ${error.message}`, true);
+          riskResult.textContent = "Request failed.";
+          riskResult.className = "result empty";
+          setStatus(`Assessment failed: ${error.message}`, true);
         }
       });
     </script>
