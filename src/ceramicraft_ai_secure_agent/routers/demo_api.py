@@ -1,11 +1,22 @@
 from enum import Enum
+from pathlib import Path
 
 from fastapi import APIRouter
+from fastapi.responses import HTMLResponse
 
 router = APIRouter(
     prefix="/demo",
     tags=["demo", "mock"],
 )
+
+DEMO_HTML_PATH = Path(__file__).parent / "demo_page.html"
+DEMO_HTML_FALLBACK = "<html><body><h1>Demo page unavailable</h1></body></html>"
+try:
+    DEMO_HTML = DEMO_HTML_PATH.read_text(encoding="utf-8")
+except FileNotFoundError:
+    DEMO_HTML = DEMO_HTML_FALLBACK
+except OSError:
+    DEMO_HTML = DEMO_HTML_FALLBACK
 
 
 class OpType(str, Enum):
@@ -41,3 +52,9 @@ def risk_access(user_id: int):
     from ceramicraft_ai_secure_agent.service.agent_service import assess_risk
 
     return assess_risk(user_id=user_id)
+
+
+@router.get("/page", response_class=HTMLResponse)
+def demo_page() -> str:
+    """Interactive HTML page for demo APIs."""
+    return DEMO_HTML
