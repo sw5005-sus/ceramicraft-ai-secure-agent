@@ -14,6 +14,7 @@ from sklearn.metrics import (
     recall_score,
     roc_auc_score,
 )
+from sklearn.preprocessing import StandardScaler
 
 from ceramicraft_ai_secure_agent.data.feature_columns import FEATURE_COLUMNS
 
@@ -21,6 +22,7 @@ from ceramicraft_ai_secure_agent.data.feature_columns import FEATURE_COLUMNS
 def _build_model_weights(
     model: LogisticRegression,
     metrics: dict[str, float],
+    scaler: StandardScaler,
 ) -> dict:
     """Export a lightweight inference payload without sklearn runtime dependency."""
     if len(model.coef_) != 1:
@@ -28,11 +30,17 @@ def _build_model_weights(
             "Only binary LogisticRegression is supported for lightweight export."
         )
 
+    coef_dict = dict(zip(FEATURE_COLUMNS, model.coef_[0]))
+    mean_dict = dict(zip(FEATURE_COLUMNS, scaler.mean_))
+    std_dict = dict(zip(FEATURE_COLUMNS, scaler.scale_))
+
     return {
         "model_type": "logistic_regression",
         "feature_columns": FEATURE_COLUMNS,
-        "coef": model.coef_[0].tolist(),
+        "coef": coef_dict,
         "intercept": float(model.intercept_[0]),
+        "mean": mean_dict,
+        "std": std_dict,
         "classes": model.classes_.tolist(),
         "positive_class": int(model.classes_[-1]),
         "threshold": 0.5,
@@ -47,7 +55,7 @@ def main() -> None:
     max_iter = int(os.environ.get("MAX_ITER", "1000"))
     random_state = int(os.environ.get("RANDOM_STATE", "42"))
 
-    mlflow_uri = os.environ.get("MLFLOW_TRACKING_URI", "localhost:5000")
+    mlflow_uri = os.environ.get("MLFLOW_TRACKING_URI")
     use_mlflow = mlflow_uri is not None
 
     artifact_output_dir = Path("artifacts")
@@ -92,16 +100,19 @@ def main() -> None:
     # ---------- 3. Train ----------
     # Use .values so the runtime payload is purely coefficient-based and
     # inference can be implemented without sklearn.
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train.values)
     model = LogisticRegression(
         random_state=random_state,
         max_iter=max_iter,
         class_weight="balanced",
     )
-    model.fit(X_train.values, y_train)
+    model.fit(X_train_scaled, y_train)
 
     # ---------- 4. Evaluate ----------
-    y_pred = model.predict(X_test.values)
-    y_prob = model.predict_proba(X_test.values)[:, 1]
+    X_test_scaled = scaler.transform(X_test.values)
+    y_pred = model.predict(X_test_scaled)
+    y_prob = model.predict_proba(X_test_scaled)[:, 1]
 
     metrics = {
         "accuracy": float(accuracy_score(y_test, y_pred)),
@@ -120,7 +131,7 @@ def main() -> None:
     print(classification_report(y_test, y_pred, zero_division=0))
 
     # ---------- 5. Export lightweight model ----------
-    model_weights = _build_model_weights(model, metrics)
+    model_weights = _build_model_weights(model, metrics, scaler)
 
     weights_path = artifact_output_dir / "model_weights.json"
     with open(weights_path, "w", encoding="utf-8") as f:

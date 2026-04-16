@@ -49,12 +49,16 @@ from ceramicraft_ai_secure_agent.service.policy_engine import (
 )
 from ceramicraft_ai_secure_agent.service.rule_engine import evaluate_rules_tool
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
+from ceramicraft_ai_secure_agent.utils.metric import metric_timed
 from ceramicraft_ai_secure_agent.utils.mlflow_trace import (
     LLM_MODEL_NAME,
     PROMPT_NAME,
     PROMPT_VERSION,
     safe_update_trace,
     trace,
+)
+from ceramicraft_ai_secure_agent.utils.openai import (
+    invoke_llm_with_metrics,
 )
 
 logger = get_logger(__name__)
@@ -117,6 +121,7 @@ def _get_loaded_prompt() -> str:
 # ---------------------------------------------------------------------------
 
 
+@metric_timed("extract_features_node")
 @trace(name="extract_features_node")
 def _extract_features_node(state: _AssessmentState) -> dict[str, Any]:
     """Node: extract features from the raw input."""
@@ -132,6 +137,7 @@ def _evaluate_rules_node(state: _AssessmentState) -> dict[str, Any]:
     return {"rule_result": res}
 
 
+@metric_timed("predict_node")
 @trace(name="predict_node")
 def _predict_node(state: _AssessmentState) -> dict[str, Any]:
     """Node: run the ML model on the feature set."""
@@ -146,6 +152,16 @@ def _compute_score_node(state: _AssessmentState) -> dict[str, Any]:
     return {"score_result": score_result}
 
 
+def _get_llm_metric_attrs(state: _AssessmentState) -> dict[str, str]:
+    return {
+        "llm.model": LLM_MODEL_NAME,
+        "prompt.name": PROMPT_NAME,
+        "prompt.version": PROMPT_VERSION,
+        "risk.level": str(state.get("score_result", {}).get("risk_level", "unknown")),
+    }
+
+
+@metric_timed("llm_judge_node")
 @trace(name="llm_judge_node")
 def _llm_judge_node(state: _AssessmentState) -> dict[str, Any]:
     """Node: use an OpenAI LLM to produce a risk judgment and recommendation.
@@ -178,7 +194,9 @@ def _llm_judge_node(state: _AssessmentState) -> dict[str, Any]:
     prompt = _build_llm_prompt(state)
     llm = _get_llm()
     try:
-        response = llm.invoke(prompt)
+        response = invoke_llm_with_metrics(
+            llm=llm, prompt=prompt, attrs=_get_llm_metric_attrs(state)
+        )
         return {"recommendation": str(response.content)}
     except Exception as e:
         logger.error(f"LLM invocation failed: {e}. Using fallback recommendation.")
@@ -224,6 +242,7 @@ action_map = {
 }
 
 
+@trace(name="execute_action_node")
 def _action_node(state: _AssessmentState) -> dict[str, Any]:
     """Node: execute the recommended action (placeholder)."""
     recommendation = state["recommendation"]
@@ -399,6 +418,7 @@ def assess_risk(user_id: int) -> dict[str, Any]:
         "risk_level": score["risk_level"],
         "triggered_rules": score["triggered_rules"],
         "fraud_probability": score["fraud_probability"],
+        "explanation": final_state["ml_result"].get("explanation", []),
         "recommendation": final_state["recommendation"],
     }
     logger.info(

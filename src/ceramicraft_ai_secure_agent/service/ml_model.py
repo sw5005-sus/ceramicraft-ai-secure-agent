@@ -47,16 +47,49 @@ def _sigmoid(x: float) -> float:
     return z / (1.0 + z)
 
 
-def predict_proba_from_features(features: dict[str, float]) -> float:
+def predict_proba_from_features(features: dict[str, float]) -> tuple[float, list[dict]]:
     model = _load_model()
-    cols = model["feature_columns"]
     coef = model["coef"]
     intercept = model["intercept"]
-
+    means = model["mean"]
+    stds = model["std"]
+    feature_contributions = []
+    total_abs_score = abs(intercept)
+    feature_contributions.append({"feature": "intercept", "contribution": intercept})
     score = intercept
-    for c, w in zip(cols, coef):
-        score += float(features.get(c, 0.0)) * float(w)
-    return _sigmoid(score)
+    for c in model["feature_columns"]:
+        raw_val = float(features.get(c, 0.0))
+
+        mean_val = means[c]
+        std_val = stds[c]
+        w = coef[c]
+
+        scaled_val = (raw_val - mean_val) / (std_val if std_val != 0 else 1.0)
+        contribution = scaled_val * w
+        feature_contributions.append({"feature": c, "contribution": contribution})
+        total_abs_score += abs(contribution)
+        score += contribution
+
+    top_features = sorted(
+        [item for item in feature_contributions if item["feature"] != "intercept"],
+        key=lambda x: abs(x["contribution"]),
+        reverse=True,
+    )[:3]
+    explanation = []
+    for item in top_features:
+        percentage = (
+            (abs(item["contribution"]) / total_abs_score) * 100
+            if total_abs_score != 0
+            else 0
+        )
+        explanation.append(
+            {
+                "name": item["feature"],
+                "impact": round(item["contribution"], 4),
+                "ratio": f"{round(percentage, 2)}%",
+            }
+        )
+    return _sigmoid(score), explanation
 
 
 def predict(features: dict[str, Any]) -> dict[str, Any]:
@@ -64,17 +97,17 @@ def predict(features: dict[str, Any]) -> dict[str, Any]:
 
     Args:
         features: Feature dictionary produced by ``feature_service.extract_features``.
-
     Returns:
         Dictionary with keys:
           - ``fraud_probability`` (float): probability in [0, 1].
           - ``prediction`` (int): 1 = fraud, 0 = legitimate.
     """
     try:
-        prob = predict_proba_from_features(features)
+        prob, explanation = predict_proba_from_features(features)
         return {
             "fraud_probability": prob,
             "prediction": 1 if prob >= 0.5 else 0,
+            "explanation": explanation,
         }
     except Exception as e:
         logger.error(f"ML Prediction failed: {str(e)}")
@@ -91,6 +124,6 @@ def predict_tool(features: dict) -> dict:
 
     Returns:
         Dictionary with ``fraud_probability`` (float in [0, 1]) and
-        ``prediction`` (int: 1 = fraud, 0 = legitimate).
+        ``prediction`` (int: 1 = fraud, 0 = legitimate), ``explanation`` (list).
     """
     return predict(features)

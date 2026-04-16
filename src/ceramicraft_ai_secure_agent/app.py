@@ -7,9 +7,11 @@ import contextlib
 from typing import Optional
 
 from fastapi import FastAPI, Header, HTTPException, Request
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
 from ceramicraft_ai_secure_agent.config.config import get_config
 from ceramicraft_ai_secure_agent.kafka.consumer import consume
+from ceramicraft_ai_secure_agent.routers.demo_api import router as demo_router
 from ceramicraft_ai_secure_agent.service.feature_service import (
     UserRequest,
     validate_and_update_feature_with_request,
@@ -50,6 +52,8 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+FastAPIInstrumentor.instrument_app(app)
+app.include_router(demo_router)
 
 
 @app.get("/ai-secure-agent-ms/v1/ping", tags=["Health"])

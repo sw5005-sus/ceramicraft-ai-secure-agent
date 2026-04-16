@@ -70,7 +70,9 @@ class TestMLModel(unittest.TestCase):
     def test_predict_proba_from_features_computes_expected_probability(self):
         fake_model = {
             "feature_columns": ["a", "b", "c"],
-            "coef": [0.5, -0.25, 1.0],
+            "coef": {"a": 0.5, "b": -0.25, "c": 1.0},
+            "mean": {"a": 0.0, "b": 0.0, "c": 0.0},
+            "std": {"a": 1.0, "b": 1.0, "c": 1.0},
             "intercept": -1.0,
         }
         features = {
@@ -82,14 +84,16 @@ class TestMLModel(unittest.TestCase):
         # score = -1.0 + 2*0.5 + 4*(-0.25) + 1*1.0 = 0.0
         # sigmoid(0) = 0.5
         with patch.object(self.ml_model, "_load_model", return_value=fake_model):
-            prob = self.ml_model.predict_proba_from_features(features)
+            prob, _ = self.ml_model.predict_proba_from_features(features)
 
         self.assertAlmostEqual(prob, 0.5, places=6)
 
     def test_predict_proba_from_features_fills_missing_features_with_zero(self):
         fake_model = {
             "feature_columns": ["a", "b"],
-            "coef": [1.0, 2.0],
+            "coef": {"a": 1.0, "b": 2.0},
+            "mean": {"a": 0.0, "b": 0.0},
+            "std": {"a": 1.0, "b": 1.0},
             "intercept": 0.0,
         }
         features = {
@@ -98,7 +102,7 @@ class TestMLModel(unittest.TestCase):
         }
 
         with patch.object(self.ml_model, "_load_model", return_value=fake_model):
-            prob = self.ml_model.predict_proba_from_features(features)
+            prob, _ = self.ml_model.predict_proba_from_features(features)
 
         expected = 1.0 / (1.0 + math.exp(-1.0))
         self.assertAlmostEqual(prob, expected, places=6)
@@ -109,7 +113,7 @@ class TestMLModel(unittest.TestCase):
         with patch.object(
             self.ml_model,
             "predict_proba_from_features",
-            return_value=0.8,
+            return_value=(0.8, []),
         ):
             result = self.ml_model.predict(features)
 
@@ -118,6 +122,7 @@ class TestMLModel(unittest.TestCase):
             {
                 "fraud_probability": 0.8,
                 "prediction": 1,
+                "explanation": [],
             },
         )
 
@@ -127,7 +132,7 @@ class TestMLModel(unittest.TestCase):
         with patch.object(
             self.ml_model,
             "predict_proba_from_features",
-            return_value=0.3,
+            return_value=(0.3, []),
         ):
             result = self.ml_model.predict(features)
 
@@ -136,6 +141,7 @@ class TestMLModel(unittest.TestCase):
             {
                 "fraud_probability": 0.3,
                 "prediction": 0,
+                "explanation": [],
             },
         )
 

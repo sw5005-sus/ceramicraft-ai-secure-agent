@@ -3,15 +3,15 @@ http:
   port: 8080
 
 redis:
-  host: 10.249.206.157
+  host: 172.17.29.75
   port: 6379
 
 kafka:
-  bootstrap_servers: 10.249.206.157:9092
+  bootstrap_servers: 172.17.29.75:9092
   group_id: ceramicraft_ai_secure_agent_group
 
 mysql:
-  host: 10.249.206.157
+  host: 172.17.29.75
   port: 3306
   username: root
   database: admin_db

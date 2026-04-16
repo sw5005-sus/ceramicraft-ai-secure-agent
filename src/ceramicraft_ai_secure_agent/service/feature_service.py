@@ -107,12 +107,10 @@ def extract_features(user_id: int) -> dict[str, int | float | str]:
             _get_avg_order_amount_today, user_id=user_id
         ),
         "account_age_days": feature_executor.submit(
-            lambda: math.ceil(
-                (
-                    datetime.now().timestamp()
-                    - user_storage.get_user_register_time(user_id=user_id)
-                )
-                / (24 * 3600)
+            lambda: (
+                math.ceil((datetime.now().timestamp() - reg_time) / (24 * 3600))
+                if (reg_time := user_storage.get_user_register_time(user_id=user_id))
+                else 0
             )
         ),
         "receive_address_count": feature_executor.submit(
