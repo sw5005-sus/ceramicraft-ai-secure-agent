@@ -9,7 +9,8 @@ router = APIRouter(
     tags=["demo", "mock"],
 )
 
-DEMO_HTML_PATH = Path(__file__).with_name("demo_page.html")
+DEMO_HTML_PATH = Path(__file__).parent / "demo_page.html"
+DEMO_HTML = DEMO_HTML_PATH.read_text(encoding="utf-8")
 
 
 class OpType(str, Enum):
@@ -50,4 +51,4 @@ def risk_access(user_id: int):
 @router.get("/page", response_class=HTMLResponse)
 def demo_page():
     """Interactive HTML page for demo APIs."""
-    return HTMLResponse(content=DEMO_HTML_PATH.read_text(encoding="utf-8"))
+    return HTMLResponse(content=DEMO_HTML)
