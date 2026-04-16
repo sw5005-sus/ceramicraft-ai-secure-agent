@@ -80,6 +80,7 @@ class TestAgentService(unittest.TestCase):
                 "triggered_rules": ["high_order_count"],
                 "fraud_probability": 0.3,
             },
+            "ml_result": {"fraud_probability": 0.3, "ml_top_contribution": []},
             "recommendation": rec_json,
         }
         mock_get_graph.return_value.invoke.return_value = mock_invoke_res

@@ -9,16 +9,34 @@
         "account_age_days",
         "receive_address_count"
     ],
-    "coef": [
-        0.28469650157051435,
-        0.04329984479726711,
-        0.5989676425022291,
-        0.03339606975158231,
-        -0.07163756386082035,
-        -0.005477175840983572,
-        0.3653173517108683
-    ],
-    "intercept": -2.001016217651222,
+    "coef": {
+        "order_count_last_1h": 1.2252570636225573,
+        "order_count_last_24h": 0.5897526365791926,
+        "unique_ip_count": 0.9221807997241119,
+        "avg_order_amount_global": 1.103634442957674,
+        "avg_order_amount_today": -3.174706863663277,
+        "account_age_days": -0.756383590232474,
+        "receive_address_count": 0.5555277406307337
+    },
+    "intercept": -3.38541781858997,
+    "mean": {
+        "order_count_last_1h": 2.9045441554729923,
+        "order_count_last_24h": 9.98542440697342,
+        "unique_ip_count": 1.8608173763932552,
+        "avg_order_amount_global": 107.3609059731352,
+        "avg_order_amount_today": 97.80680765933124,
+        "account_age_days": 220.22577879394112,
+        "receive_address_count": 1.9442697913689626
+    },
+    "std": {
+        "order_count_last_1h": 4.287340135574106,
+        "order_count_last_24h": 13.383223691527636,
+        "unique_ip_count": 1.59747747550302,
+        "avg_order_amount_global": 39.27950698372935,
+        "avg_order_amount_today": 49.31918682225687,
+        "account_age_days": 147.74252844484369,
+        "receive_address_count": 1.5405477594225103
+    },
     "classes": [
         0,
         1
@@ -30,6 +48,6 @@
         "precision": 0.8453038674033149,
         "recall": 0.9870967741935484,
         "f1": 0.9107142857142857,
-        "roc_auc": 0.9947263197708975
+        "roc_auc": 0.994823580266926
     }
 }

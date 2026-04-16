@@ -418,6 +418,7 @@ def assess_risk(user_id: int) -> dict[str, Any]:
         "risk_level": score["risk_level"],
         "triggered_rules": score["triggered_rules"],
         "fraud_probability": score["fraud_probability"],
+        "ml_top_contribution": final_state["ml_result"].get("explaination", []),
         "recommendation": final_state["recommendation"],
     }
     logger.info(
