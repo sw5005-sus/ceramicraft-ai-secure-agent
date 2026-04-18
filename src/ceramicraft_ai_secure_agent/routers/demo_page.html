@@ -70,6 +70,7 @@
         width: 100%;
         border-collapse: collapse;
         background: #fff;
+        table-layout: fixed;
       }
       th,
       td {
@@ -77,6 +78,9 @@
         padding: 8px 10px;
         text-align: left;
         font-size: 13px;
+        overflow-wrap: break-word;
+        white-space: normal;
+        word-break: keep-all;
       }
       th {
         background: #f1f5f9;
@@ -117,6 +121,7 @@
             <option value="manual_review">manual_review</option>
             <option value="watchlist">watchlist</option>
             <option value="clear">clear</option>
+            <option value="query">query</option>
           </select>
         </div>
       </div>

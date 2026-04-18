@@ -19,7 +19,7 @@ PROMPT_NAME = os.environ.get(
 )
 PROMPT_VERSION = os.environ.get(
     "FRAUD_RECOMMENDATION_PROMPT_VERSION",
-    "v3",
+    "v4",
 )
 LLM_MODEL_NAME = os.environ.get("OPENAI_MODEL_NAME", "gpt-4o-mini")
 

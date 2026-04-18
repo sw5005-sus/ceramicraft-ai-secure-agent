@@ -188,6 +188,36 @@ class TestAgentService(unittest.TestCase):
 
         self.assertIn("allow", res["recommendation"])
 
+    def test_llm_node_watchlist_directly(self):
+        """测试 LLM Judge Node 中直接 Watchlist 的逻辑分支"""
+        state: _AssessmentState = {
+            "user_id": 1001,
+            "features": {
+                "last_status": "allow",
+                "order_count_last_1h": 6,  # 触发 new_account_high_activity
+            },
+            "rule_result": {
+                "hits": ["new_account_high_activity", "ip_address_combination_anomaly"],
+                "rule_score": 0.28,  # 0.16 + 0.12
+            },
+            "ml_result": {
+                "fraud_probability": 0.42,  # 中等，不触发 LLM
+            },
+            "score_result": {
+                "risk_score": 0.36,  # ⭐关键：0.25~0.40之间
+                "risk_level": "LOW",
+                "triggered_rules": [
+                    "new_account_high_activity",
+                    "ip_address_combination_anomaly",
+                ],
+            },
+            "recommendation": "pending",
+        }
+
+        res = agent_service._llm_judge_node(state)
+
+        self.assertIn("watchlist", res["recommendation"])
+
     @patch("ceramicraft_ai_secure_agent.service.agent_service.user_last_status_storage")
     @patch("ceramicraft_ai_secure_agent.service.agent_service.BlockAction.run")
     def test_action_node_execution(self, mock_block_run, mock_status_storage):

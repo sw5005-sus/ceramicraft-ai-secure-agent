@@ -96,8 +96,8 @@ class Recommendation:
 
 no_risk_recommendation = Recommendation(
     "allow",
-    "Low risk score and no triggered rules",
-    "Legitimate transaction: low risk, no rules triggered.",
+    "Low risk score and no/few triggered rules",
+    "Legitimate transaction: low risk, no/few rules triggered.",
     "high",
     "SYSTEM_RULE",
 )
@@ -108,6 +108,18 @@ fallback_return = Recommendation(
     analyst_summary="LLM API key not set. Defaulting to manual review.",
     confidence="low",
     decision_maker="LLM_FALLBACK",
+)
+
+watchlist_recommendation = Recommendation(
+    recommended_action="watchlist",
+    reason="Moderate suspicion with limited evidence; monitoring recommended",
+    analyst_summary=(
+        "The current request shows some suspicious signals but not enough to require "
+        "immediate human review. The user should be placed on a watchlist for "
+        "continued monitoring of future activity."
+    ),
+    confidence="medium",
+    decision_maker="SYSTEM_RULE",
 )
 
 analyst_msg = (

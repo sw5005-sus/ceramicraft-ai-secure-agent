@@ -30,6 +30,7 @@ from ceramicraft_ai_secure_agent.data.state import (
     direct_block_recommendation,
     fallback_return,
     no_risk_recommendation,
+    watchlist_recommendation,
 )
 from ceramicraft_ai_secure_agent.mysqlcli.risk_user_review_storage import (
     create_risk_user_review,
@@ -46,6 +47,7 @@ from ceramicraft_ai_secure_agent.service.ml_model import predict_tool
 from ceramicraft_ai_secure_agent.service.policy_engine import (
     need_llm_judgment,
     should_block_directly,
+    should_watchlist_directly,
 )
 from ceramicraft_ai_secure_agent.service.rule_engine import evaluate_rules_tool
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
@@ -177,6 +179,18 @@ def _llm_judge_node(state: _AssessmentState) -> dict[str, Any]:
         return {"recommendation": direct_block_recommendation}
 
     if not need_llm_judgment(state):
+        if should_watchlist_directly(state):
+            logger.info(
+                "Medium-low risk signals detected. "
+                'Using "watchlist" recommendation for user %s.',
+                state["user_id"],
+            )
+            return {"recommendation": watchlist_recommendation.to_json()}
+
+        logger.info(
+            'No significant risk signals. Using "no risk" recommendation for user %s.',
+            state["user_id"],
+        )
         logger.info(
             'No significant risk signals. Using "no risk" recommendation for user %s.',
             state["user_id"],
@@ -418,7 +432,7 @@ def assess_risk(user_id: int) -> dict[str, Any]:
         "risk_level": score["risk_level"],
         "triggered_rules": score["triggered_rules"],
         "fraud_probability": score["fraud_probability"],
-        "explanation": final_state["ml_result"].get("explanation", []),
+        "ml_top_contribution": final_state["ml_result"].get("explanation", []),
         "recommendation": final_state["recommendation"],
     }
     logger.info(
