@@ -14,7 +14,9 @@ logger = get_logger(__name__)
 THRESHOLD_RISK_SCORE_BLOCK = 0.85
 THRESHOLD_RISK_SCORE_LLM_REQUIRED = 0.40
 THRESHOLD_RISK_SCORE_SAFE = 0.20
+THRESHOLD_RISK_SCORE_WATCHLIST = 0.25
 
+THRESHOLD_ML_SCORE_WATCHLIST = 0.6
 THRESHOLD_RULE_ML_BOTH_HIGH_RULE = 0.70
 THRESHOLD_RULE_ML_BOTH_HIGH_ML = 0.80
 
@@ -95,6 +97,23 @@ def need_llm_judgment(state: Assessment) -> bool:
 
     # rule score and fraud probability are in conflict, LLM judgment required
     if abs(rule_score - fraud_probability) >= THRESHOLD_CONFLICT_DIFF:
+        return True
+
+    return False
+
+
+def should_watchlist_directly(state: Assessment) -> bool:
+    rule_score = state["rule_result"].get("rule_score", 0.0)
+    fraud_probability = state["ml_result"].get("fraud_probability", 0.0)
+    risk_score = state["score_result"].get("risk_score", 0.0)
+    triggered_rules = state["score_result"].get("triggered_rules", [])
+
+    if (
+        THRESHOLD_RISK_SCORE_WATCHLIST <= risk_score < THRESHOLD_RISK_SCORE_LLM_REQUIRED
+        and fraud_probability < THRESHOLD_ML_SCORE_WATCHLIST
+        and rule_score > 0
+        and len(triggered_rules) >= 1
+    ):
         return True
 
     return False

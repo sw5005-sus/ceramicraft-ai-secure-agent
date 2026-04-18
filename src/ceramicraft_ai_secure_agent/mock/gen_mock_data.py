@@ -194,56 +194,77 @@ def gen_mock_block(user_id: int):
 
 
 def gen_mock_watchlist(user_id: int):
-    now = time.time()
+    now = int(time.time())
     today = datetime.now().strftime("%Y%m%d")
     today_expire = int(datetime.strptime(today, "%Y%m%d").timestamp() + 24 * 3600 - now)
 
-    # registered 60 days ago
-    get_redis_client().set(f"u:{user_id}:rt", int(now - 60 * 24 * 3600))
+    r = get_redis_client()
 
-    # 4 normal orders in last 24h, only 1 in last 1h
-    get_redis_client().zadd(
+    # 清掉本次行为相关数据，但不动别的用户
+    r.delete(
+        f"u:{user_id}:o",
+        f"u:{user_id}:ip",
+        f"u:{user_id}:ra",
+        f"u:{user_id}:stat",
+        f"u:{user_id}:stat:{today}",
+        f"u:{user_id}:ls",
+    )
+
+    # 账号 20 天前注册
+    # 命中新号高活跃时只需要 <= 30 天，不一定要特别新
+    r.set(f"u:{user_id}:rt", now - 20 * 24 * 3600)
+
+    # 最近 1h 恰好 6 单：刚好命中 new_account_high_activity = 0.16
+    # 但远离 high_order_count_last_1h >= 10
+    r.zadd(
         f"u:{user_id}:o",
         {
-            f"ord-{user_id}-1": now - 20 * 60,
-            f"ord-{user_id}-2": now - 3 * 3600,
-            f"ord-{user_id}-3": now - 8 * 3600,
-            f"ord-{user_id}-4": now - 18 * 3600,
+            f"ord-{user_id}-1": now - 5 * 60,
+            f"ord-{user_id}-2": now - 12 * 60,
+            f"ord-{user_id}-3": now - 20 * 60,
+            f"ord-{user_id}-4": now - 28 * 60,
+            f"ord-{user_id}-5": now - 36 * 60,
+            f"ord-{user_id}-6": now - 50 * 60,
         },
     )
 
-    # 2 IPs
-    get_redis_client().zadd(
+    # 3 个 IP + 3 个地址：只命中 ip_address_combination_anomaly = 0.12
+    # 不到 5，不会命中 multiple_unique_ips
+    r.zadd(
         f"u:{user_id}:ip",
         {
-            "4.4.4.1": now - 20 * 60,
-            "4.4.4.2": now - 5 * 3600,
+            "9.9.9.1": now - 5 * 60,
+            "9.9.9.2": now - 25 * 60,
+            "9.9.9.3": now - 45 * 60,
         },
     )
 
-    # 2 receiving addresses
-    get_redis_client().sadd(f"u:{user_id}:ra", "400001", "400002")
+    r.sadd(
+        f"u:{user_id}:ra",
+        "900001",
+        "900002",
+        "900003",
+    )
 
-    # amount normal
-    get_redis_client().hset(
+    # 金额尽量正常，避免 amount_drop / low_value
+    # global avg = 85.00
+    r.hset(
         f"u:{user_id}:stat",
         mapping={
-            "amount": 32000,
-            "count": 4,
+            "amount": 51000,
+            "count": 6,
         },
     )
 
-    get_redis_client().hset(
+    # today avg = 83.00
+    r.hset(
         f"u:{user_id}:stat:{today}",
         mapping={
-            "amount": 31200,
-            "count": 4,
+            "amount": 49800,
+            "count": 6,
         },
     )
-    get_redis_client().expire(f"u:{user_id}:stat:{today}", today_expire)
-
-    # put user on watchlist
-    get_redis_client().zadd("watchlist", {str(user_id): now})
+    r.expire(f"u:{user_id}:stat:{today}", today_expire)
 
     print(f"Generated watchlist mock data for user {user_id}.")
 

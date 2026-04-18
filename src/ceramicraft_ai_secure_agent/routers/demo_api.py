@@ -25,6 +25,7 @@ class OpType(str, Enum):
     block = "block"
     manual_review = "manual_review"
     watchlist = "watchlist"
+    query = "query"
 
 
 @router.post("/mock-data")
@@ -43,6 +44,7 @@ def gen_mock_data(user_id: int, op_type: OpType):
         gen_mock_data.gen_mock_manual_review(user_id=user_id)
     elif op_type == OpType.watchlist:
         gen_mock_data.gen_mock_watchlist(user_id=user_id)
+
     return extract_features(user_id=user_id)
 
 
