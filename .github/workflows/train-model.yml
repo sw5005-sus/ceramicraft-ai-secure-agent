@@ -9,6 +9,9 @@ on:
         default: "fraud/v2/fraud_training_data.csv"
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   train:
     runs-on: ubuntu-latest
@@ -35,12 +38,14 @@ jobs:
           DATASET_S3_KEY: ${{ inputs.training_data_s3_key }}
         run: |
           mkdir -p data
-          aws s3 cp "s3://ceramicraft-mldataset/${DATASET_S3_KEY}" "data/fraud_training_data.csv"
+          DATA_FILE_NAME="$(basename "${DATASET_S3_KEY}")"
+          LOCAL_DATA_PATH="data/${DATA_FILE_NAME}"
+          aws s3 cp "s3://ceramicraft-mldataset/${DATASET_S3_KEY}" "${LOCAL_DATA_PATH}"
+          echo "TRAINING_DATA_PATH=${LOCAL_DATA_PATH}" >> "${GITHUB_ENV}"
 
       - name: Train model
         env:
-          TRAINING_DATA_PATH: data/fraud_training_data.csv
-          MLFLOW_TRACKING_URI: mlflow.ntdoc.site
+          MLFLOW_TRACKING_URI: https://mlflow.ntdoc.site
         run: uv run --group train python scripts/train_model.py
 
       - name: Enforce model quality gates
