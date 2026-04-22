@@ -16,27 +16,27 @@ on:
       min_accuracy:
         description: "Minimum required accuracy"
         required: true
-        default: "0.95"
+        default: 0.95
         type: number
       min_precision:
         description: "Minimum required precision"
         required: true
-        default: "0.80"
+        default: 0.80
         type: number
       min_recall:
         description: "Minimum required recall"
         required: true
-        default: "0.95"
+        default: 0.95
         type: number
       min_f1:
         description: "Minimum required f1 score"
         required: true
-        default: "0.88"
+        default: 0.88
         type: number
       min_roc_auc:
         description: "Minimum required ROC-AUC"
         required: true
-        default: "0.98"
+        default: 0.98
         type: number
 
 permissions:
@@ -94,14 +94,14 @@ jobs:
           import os
           from pathlib import Path
 
-          metrics_path = Path("artifacts/model_metadata.json")
-          if not metrics_path.exists():
-              raise FileNotFoundError(f"Expected metrics file not found: {metrics_path}")
+          metadata_path = Path("artifacts/model_metadata.json")
+          if not metadata_path.exists():
+              raise FileNotFoundError(f"Expected metadata file not found: {metadata_path}")
 
-          payload = json.loads(metrics_path.read_text(encoding="utf-8"))
+          payload = json.loads(metadata_path.read_text(encoding="utf-8"))
           metrics = payload.get("metrics", {})
 
-          def threshold(name: str, env_name: str) -> float:
+          def parse_threshold(name: str, env_name: str) -> float:
               raw = os.environ.get(env_name)
               try:
                   return float(raw)
@@ -111,11 +111,11 @@ jobs:
                   ) from exc
 
           thresholds = {
-              "accuracy": threshold("accuracy", "MIN_ACCURACY"),
-              "precision": threshold("precision", "MIN_PRECISION"),
-              "recall": threshold("recall", "MIN_RECALL"),
-              "f1": threshold("f1", "MIN_F1"),
-              "roc_auc": threshold("roc_auc", "MIN_ROC_AUC"),
+              "accuracy": parse_threshold("accuracy", "MIN_ACCURACY"),
+              "precision": parse_threshold("precision", "MIN_PRECISION"),
+              "recall": parse_threshold("recall", "MIN_RECALL"),
+              "f1": parse_threshold("f1", "MIN_F1"),
+              "roc_auc": parse_threshold("roc_auc", "MIN_ROC_AUC"),
           }
 
           failed = []
