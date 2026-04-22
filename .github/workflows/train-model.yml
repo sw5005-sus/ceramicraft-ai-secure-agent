@@ -119,13 +119,15 @@ jobs:
           }
 
           failed = []
-          for name, threshold in thresholds.items():
+          for name, min_threshold in thresholds.items():
               value = metrics.get(name)
               if value is None:
-                  failed.append(f"{name}=missing (required >= {threshold:.4f})")
+                  failed.append(f"{name}=missing (required >= {min_threshold:.4f})")
                   continue
-              if float(value) < threshold:
-                  failed.append(f"{name}={float(value):.4f} (required >= {threshold:.4f})")
+              if float(value) < min_threshold:
+                  failed.append(
+                      f"{name}={float(value):.4f} (required >= {min_threshold:.4f})"
+                  )
 
           print("Model metrics:", metrics)
           if failed:
