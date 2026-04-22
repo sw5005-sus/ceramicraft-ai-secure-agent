@@ -1,0 +1,144 @@
+name: Train Model
+
+on:
+  workflow_dispatch:
+    inputs:
+      training_data_s3_key:
+        description: "S3 object key under s3://ceramicraft-mldataset"
+        required: true
+        default: "fraud/v2/fraud_training_data.csv"
+        type: string
+      mlflow_tracking_uri:
+        description: "MLflow tracking URI"
+        required: true
+        default: "https://mlflow.ntdoc.site"
+        type: string
+      min_accuracy:
+        description: "Minimum required accuracy"
+        required: true
+        default: 0.95
+        type: number
+      min_precision:
+        description: "Minimum required precision"
+        required: true
+        default: 0.80
+        type: number
+      min_recall:
+        description: "Minimum required recall"
+        required: true
+        default: 0.95
+        type: number
+      min_f1:
+        description: "Minimum required f1 score"
+        required: true
+        default: 0.88
+        type: number
+      min_roc_auc:
+        description: "Minimum required ROC-AUC"
+        required: true
+        default: 0.98
+        type: number
+
+permissions:
+  contents: read
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install training dependencies
+        run: uv sync --group train
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Download training data from S3
+        env:
+          DATASET_S3_KEY: ${{ inputs.training_data_s3_key }}
+        run: |
+          mkdir -p data
+          DATA_FILE_NAME="$(basename "${DATASET_S3_KEY}")"
+          LOCAL_DATA_PATH="data/${DATA_FILE_NAME}"
+          aws s3 cp "s3://ceramicraft-mldataset/${DATASET_S3_KEY}" "${LOCAL_DATA_PATH}"
+          echo "TRAINING_DATA_PATH=${LOCAL_DATA_PATH}" >> "${GITHUB_ENV}"
+
+      - name: Train model
+        env:
+          MLFLOW_TRACKING_URI: ${{ inputs.mlflow_tracking_uri }}
+        run: uv run --group train python scripts/train_model.py
+
+      - name: Enforce model quality gates
+        env:
+          MIN_ACCURACY: ${{ inputs.min_accuracy }}
+          MIN_PRECISION: ${{ inputs.min_precision }}
+          MIN_RECALL: ${{ inputs.min_recall }}
+          MIN_F1: ${{ inputs.min_f1 }}
+          MIN_ROC_AUC: ${{ inputs.min_roc_auc }}
+        run: |
+          uv run --group train python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          metadata_path = Path("artifacts/model_metadata.json")
+          if not metadata_path.exists():
+              raise FileNotFoundError(f"Expected metadata file not found: {metadata_path}")
+
+          payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+          metrics = payload.get("metrics", {})
+
+          def parse_threshold(name: str, env_name: str) -> float:
+              raw = os.environ.get(env_name)
+              try:
+                  return float(raw)
+              except (TypeError, ValueError) as exc:
+                  raise ValueError(
+                      f"Invalid threshold for {name}: {raw!r} from {env_name}"
+                  ) from exc
+
+          thresholds = {
+              "accuracy": parse_threshold("accuracy", "MIN_ACCURACY"),
+              "precision": parse_threshold("precision", "MIN_PRECISION"),
+              "recall": parse_threshold("recall", "MIN_RECALL"),
+              "f1": parse_threshold("f1", "MIN_F1"),
+              "roc_auc": parse_threshold("roc_auc", "MIN_ROC_AUC"),
+          }
+
+          failed = []
+          for name, min_threshold in thresholds.items():
+              value = metrics.get(name)
+              if value is None:
+                  failed.append(f"{name}=missing (required >= {min_threshold:.4f})")
+                  continue
+              if float(value) < min_threshold:
+                  failed.append(
+                      f"{name}={float(value):.4f} (required >= {min_threshold:.4f})"
+                  )
+
+          print("Model metrics:", metrics)
+          if failed:
+              raise SystemExit("Model quality gate failed: " + ", ".join(failed))
+          print("Model quality gate passed.")
+          PY
+
+      - name: Upload training artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: training-artifacts
+          path: artifacts/
+          if-no-files-found: warn
