@@ -8,6 +8,36 @@ on:
         required: true
         default: "fraud/v2/fraud_training_data.csv"
         type: string
+      mlflow_tracking_uri:
+        description: "MLflow tracking URI"
+        required: true
+        default: "https://mlflow.ntdoc.site"
+        type: string
+      min_accuracy:
+        description: "Minimum required accuracy"
+        required: true
+        default: "0.95"
+        type: string
+      min_precision:
+        description: "Minimum required precision"
+        required: true
+        default: "0.80"
+        type: string
+      min_recall:
+        description: "Minimum required recall"
+        required: true
+        default: "0.95"
+        type: string
+      min_f1:
+        description: "Minimum required f1 score"
+        required: true
+        default: "0.88"
+        type: string
+      min_roc_auc:
+        description: "Minimum required ROC-AUC"
+        required: true
+        default: "0.98"
+        type: string
 
 permissions:
   contents: read
@@ -45,13 +75,20 @@ jobs:
 
       - name: Train model
         env:
-          MLFLOW_TRACKING_URI: https://mlflow.ntdoc.site
+          MLFLOW_TRACKING_URI: ${{ inputs.mlflow_tracking_uri }}
         run: uv run --group train python scripts/train_model.py
 
       - name: Enforce model quality gates
+        env:
+          MIN_ACCURACY: ${{ inputs.min_accuracy }}
+          MIN_PRECISION: ${{ inputs.min_precision }}
+          MIN_RECALL: ${{ inputs.min_recall }}
+          MIN_F1: ${{ inputs.min_f1 }}
+          MIN_ROC_AUC: ${{ inputs.min_roc_auc }}
         run: |
-          python - <<'PY'
+          uv run --group train python - <<'PY'
           import json
+          import os
           from pathlib import Path
 
           metrics_path = Path("artifacts/model_metadata.json")
@@ -61,11 +98,11 @@ jobs:
           payload = json.loads(metrics_path.read_text(encoding="utf-8"))
           metrics = payload.get("metrics", {})
           thresholds = {
-              "accuracy": 0.95,
-              "precision": 0.80,
-              "recall": 0.95,
-              "f1": 0.88,
-              "roc_auc": 0.98,
+              "accuracy": float(os.environ["MIN_ACCURACY"]),
+              "precision": float(os.environ["MIN_PRECISION"]),
+              "recall": float(os.environ["MIN_RECALL"]),
+              "f1": float(os.environ["MIN_F1"]),
+              "roc_auc": float(os.environ["MIN_ROC_AUC"]),
           }
 
           failed = []
