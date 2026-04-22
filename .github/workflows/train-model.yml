@@ -17,27 +17,27 @@ on:
         description: "Minimum required accuracy"
         required: true
         default: "0.95"
-        type: string
+        type: number
       min_precision:
         description: "Minimum required precision"
         required: true
         default: "0.80"
-        type: string
+        type: number
       min_recall:
         description: "Minimum required recall"
         required: true
         default: "0.95"
-        type: string
+        type: number
       min_f1:
         description: "Minimum required f1 score"
         required: true
         default: "0.88"
-        type: string
+        type: number
       min_roc_auc:
         description: "Minimum required ROC-AUC"
         required: true
         default: "0.98"
-        type: string
+        type: number
 
 permissions:
   contents: read
@@ -100,12 +100,22 @@ jobs:
 
           payload = json.loads(metrics_path.read_text(encoding="utf-8"))
           metrics = payload.get("metrics", {})
+
+          def threshold(name: str, env_name: str) -> float:
+              raw = os.environ.get(env_name)
+              try:
+                  return float(raw)
+              except (TypeError, ValueError) as exc:
+                  raise ValueError(
+                      f"Invalid threshold for {name}: {raw!r} from {env_name}"
+                  ) from exc
+
           thresholds = {
-              "accuracy": float(os.environ["MIN_ACCURACY"]),
-              "precision": float(os.environ["MIN_PRECISION"]),
-              "recall": float(os.environ["MIN_RECALL"]),
-              "f1": float(os.environ["MIN_F1"]),
-              "roc_auc": float(os.environ["MIN_ROC_AUC"]),
+              "accuracy": threshold("accuracy", "MIN_ACCURACY"),
+              "precision": threshold("precision", "MIN_PRECISION"),
+              "recall": threshold("recall", "MIN_RECALL"),
+              "f1": threshold("f1", "MIN_F1"),
+              "roc_auc": threshold("roc_auc", "MIN_ROC_AUC"),
           }
 
           failed = []
