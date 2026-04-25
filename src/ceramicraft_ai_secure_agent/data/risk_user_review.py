@@ -1,3 +1,6 @@
+import json
+
+
 class RiskUserReview:
     def __init__(
         self,
@@ -12,6 +15,7 @@ class RiskUserReview:
         rule_score: float = 0.0,
         fraud_probability: float = 0.0,
         triggered_rules: list[str] | None = None,
+        ml_top_contributor: list[tuple[str, float]] | None = None,
     ):
         self.user_id = user_id
         self.create_time = create_time
@@ -25,3 +29,6 @@ class RiskUserReview:
         self.fraud_probability = fraud_probability
         rule_list = triggered_rules if triggered_rules is not None else []
         self.rules = ",".join(rule_list)
+        self.ml_top_contributor = (
+            json.dumps(ml_top_contributor) if ml_top_contributor is not None else "[]"
+        )

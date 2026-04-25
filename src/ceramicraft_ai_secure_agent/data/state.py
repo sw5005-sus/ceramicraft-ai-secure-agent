@@ -35,6 +35,7 @@ def build_risk_user_review_from_state(state: AssessmentState) -> RiskUserReview:
         fraud_probability=state["ml_result"].get("fraud_probability", 0.0),
         triggered_rules=score.get("triggered_rules", []),
         decision_source=recommendation.decision_maker,
+        ml_top_contributor=state["ml_result"].get("explanation", []),
     )
 
 
