@@ -20,8 +20,9 @@ def create_risk_user_review(review: RiskUserReview) -> None:
             risk_level, 
             rule_score, 
             fraud_probability, 
-            rules
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            rules,
+            ml_top_contributor
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         with get_connection() as conn:
             params = (
@@ -36,6 +37,7 @@ def create_risk_user_review(review: RiskUserReview) -> None:
                 review.rule_score,
                 review.fraud_probability,
                 review.rules,
+                review.ml_top_contributor,
             )
             with conn.cursor() as cursor:
                 cursor.execute(sql, params)
