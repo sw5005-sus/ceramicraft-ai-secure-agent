@@ -2,7 +2,7 @@ import json
 from datetime import datetime
 from typing import Any
 
-from typing_extensions import TypedDict
+from typing_extensions import NotRequired, TypedDict
 
 from ceramicraft_ai_secure_agent.data.const import RiskUserReviewDecision
 from ceramicraft_ai_secure_agent.data.risk_user_review import RiskUserReview
@@ -17,6 +17,7 @@ class AssessmentState(TypedDict):
     ml_result: dict[str, Any]
     score_result: dict[str, Any]
     recommendation: str
+    action: NotRequired[str]
 
 
 def build_risk_user_review_from_state(state: AssessmentState) -> RiskUserReview:

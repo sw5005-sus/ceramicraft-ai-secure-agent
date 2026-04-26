@@ -10,32 +10,32 @@
         "receive_address_count"
     ],
     "coef": {
-        "order_count_last_1h": 1.2252570636225573,
-        "order_count_last_24h": 0.5897526365791926,
-        "unique_ip_count": 0.9221807997241119,
-        "avg_order_amount_global": 1.103634442957674,
-        "avg_order_amount_today": -3.174706863663277,
-        "account_age_days": -0.756383590232474,
-        "receive_address_count": 0.5555277406307337
+        "order_count_last_1h": 1.1360178698277108,
+        "order_count_last_24h": 0.936125387524952,
+        "unique_ip_count": 0.8094277214901989,
+        "avg_order_amount_global": 0.8218059120288409,
+        "avg_order_amount_today": -2.6867970699030277,
+        "account_age_days": -0.8656116176872285,
+        "receive_address_count": 0.7182980899683363
     },
-    "intercept": -3.38541781858997,
+    "intercept": -3.5333963270390485,
     "mean": {
-        "order_count_last_1h": 2.9045441554729923,
-        "order_count_last_24h": 9.98542440697342,
-        "unique_ip_count": 1.8608173763932552,
-        "avg_order_amount_global": 107.3609059731352,
-        "avg_order_amount_today": 97.80680765933124,
-        "account_age_days": 220.22577879394112,
-        "receive_address_count": 1.9442697913689626
+        "order_count_last_1h": 2.9974278365247216,
+        "order_count_last_24h": 10.06516147470706,
+        "unique_ip_count": 1.8222349242640754,
+        "avg_order_amount_global": 107.1941440411546,
+        "avg_order_amount_today": 97.29560731637609,
+        "account_age_days": 221.13946841954845,
+        "receive_address_count": 1.9605601600457274
     },
     "std": {
-        "order_count_last_1h": 4.287340135574106,
-        "order_count_last_24h": 13.383223691527636,
-        "unique_ip_count": 1.59747747550302,
-        "avg_order_amount_global": 39.27950698372935,
-        "avg_order_amount_today": 49.31918682225687,
-        "account_age_days": 147.74252844484369,
-        "receive_address_count": 1.5405477594225103
+        "order_count_last_1h": 4.421587539299056,
+        "order_count_last_24h": 13.46524049846703,
+        "unique_ip_count": 1.5050102210054053,
+        "avg_order_amount_global": 39.50514083097641,
+        "avg_order_amount_today": 49.129019678972604,
+        "account_age_days": 146.14279871513884,
+        "receive_address_count": 1.5586612137037363
     },
     "classes": [
         0,
@@ -44,10 +44,10 @@
     "positive_class": 1,
     "threshold": 0.5,
     "metrics": {
-        "accuracy": 0.9601063829787234,
-        "precision": 0.8453038674033149,
-        "recall": 0.9870967741935484,
-        "f1": 0.9107142857142857,
-        "roc_auc": 0.994823580266926
+        "accuracy": 0.9787234042553191,
+        "precision": 0.9263803680981595,
+        "recall": 0.9741935483870968,
+        "f1": 0.949685534591195,
+        "roc_auc": 0.9948992273193926
     }
 }
