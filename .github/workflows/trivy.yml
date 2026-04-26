@@ -29,3 +29,20 @@ jobs:
           exit-code: '1'
           severity: 'CRITICAL,HIGH'
           ignore-unfixed: true
+      - name: Trivy summary
+        if: always()
+        run: |
+          trivy image \
+            --quiet \
+            --format json \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed \
+            -o trivy.json \
+            ceramicraft-ai-secure-agent:${{ github.sha }}
+      
+          HIGH=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy.json)
+          CRITICAL=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy.json)
+          TOTAL=$((HIGH + CRITICAL))
+      
+          echo "==== Trivy Summary ===="
+          echo "Total: ${TOTAL} (HIGH: ${HIGH}, CRITICAL: ${CRITICAL})"
