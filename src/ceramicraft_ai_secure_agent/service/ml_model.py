@@ -24,7 +24,7 @@ _MODEL_PATH: Path = (
     Path(__file__).resolve().parent.parent / "model" / "model_weights.json"
 )
 
-_MODEL_VERSION = "v4"
+_MODEL_VERSION = "v5"
 _model = None
 
 
