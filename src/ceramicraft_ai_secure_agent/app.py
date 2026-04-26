@@ -7,7 +7,11 @@ import contextlib
 from typing import Optional
 
 from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 
 from ceramicraft_ai_secure_agent.config.config import get_config
 from ceramicraft_ai_secure_agent.kafka.consumer import consume
@@ -19,6 +23,27 @@ from ceramicraft_ai_secure_agent.service.feature_service import (
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Add security-related HTTP response headers to every response."""
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        response = await call_next(request)
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data:; "
+            "connect-src 'self'"
+        )
+        response.headers["Permissions-Policy"] = (
+            "camera=(), microphone=(), geolocation=()"
+        )
+        response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+        return response
 
 
 @contextlib.asynccontextmanager
@@ -53,7 +78,25 @@ app = FastAPI(
     lifespan=lifespan,
 )
 FastAPIInstrumentor.instrument_app(app)
+app.add_middleware(SecurityHeadersMiddleware)
 app.include_router(demo_router)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    """Return a generic 422 response to avoid leaking validation details."""
+    return JSONResponse(status_code=422, content={"detail": "Invalid request"})
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(
+    request: Request, exc: Exception
+) -> JSONResponse:
+    """Catch-all handler that prevents stack-trace leakage in 500 responses."""
+    logger.error("Unhandled exception: %s", exc, exc_info=exc)
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
 @app.get("/ai-secure-agent-ms/v1/ping", tags=["Health"])
