@@ -51,7 +51,11 @@ from ceramicraft_ai_secure_agent.service.policy_engine import (
 )
 from ceramicraft_ai_secure_agent.service.rule_engine import evaluate_rules_tool
 from ceramicraft_ai_secure_agent.utils.logger import get_logger
-from ceramicraft_ai_secure_agent.utils.metric import metric_timed
+from ceramicraft_ai_secure_agent.utils.metric import (
+    metric_timed,
+    record_risk_decision,
+    record_risk_score,
+)
 from ceramicraft_ai_secure_agent.utils.mlflow_trace import (
     LLM_MODEL_NAME,
     PROMPT_NAME,
@@ -266,7 +270,8 @@ def _action_node(state: _AssessmentState) -> dict[str, Any]:
     user_id = state["user_id"]
     user_last_status_storage.set_user_last_status(user_id, action_key)
     action.run(state)
-    return {}
+
+    return {"action": action_key}
 
 
 def _update_trace_with_score(state: _AssessmentState) -> None:
@@ -376,6 +381,7 @@ def _do_skip(user_id: int) -> bool:
 # ---------------------------------------------------------------------------
 
 
+@metric_timed("assess_risk")
 @trace(name="assess_risk")
 def assess_risk(user_id: int) -> dict[str, Any]:
     """Run the complete risk-assessment pipeline for a transaction.
@@ -421,6 +427,7 @@ def assess_risk(user_id: int) -> dict[str, Any]:
         "ml_result": {},
         "score_result": {},
         "recommendation": "",
+        "action": "",
     }
 
     final_state = cast(_AssessmentState, _get_graph().invoke(initial_state))
@@ -434,6 +441,8 @@ def assess_risk(user_id: int) -> dict[str, Any]:
         "fraud_probability": score["fraud_probability"],
         "ml_top_contribution": final_state["ml_result"].get("explanation", []),
         "recommendation": final_state["recommendation"],
+        "model_version": final_state["ml_result"].get("model_version", "N/A"),
+        "prompt_version": PROMPT_VERSION,
     }
     logger.info(
         "Risk assessment complete for User %s: level=%s score=%.4f",
@@ -441,5 +450,15 @@ def assess_risk(user_id: int) -> dict[str, Any]:
         score["risk_level"],
         score["risk_score"],
     )
-
+    record_risk_score(
+        risk_score=score["risk_score"],
+        risk_level=score["risk_level"],
+        fraud_probability=score["fraud_probability"],
+    )
+    record_risk_decision(
+        action=final_state.get("action", "unknown"),
+        risk_level=assessment["risk_level"],
+        model_version=assessment["model_version"],
+        prompt_version=PROMPT_VERSION,
+    )
     return assessment

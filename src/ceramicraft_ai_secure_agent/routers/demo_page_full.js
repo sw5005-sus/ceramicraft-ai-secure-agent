@@ -55,6 +55,10 @@ function renderRiskAssessment(target, data) {
   
     target.innerHTML = `
       <div class="risk-section">
+        <div class="version-row">
+          <span class="version-badge">Model ${data.model_version || "-"}</span>
+          <span class="version-badge">Prompt ${data.prompt_version || "-"}</span>
+        </div>
         <div class="risk-section-title">Risk Summary</div>
         <span class="risk-badge risk-badge-${data.risk_level?.toLowerCase()}">
           ${data.risk_level}

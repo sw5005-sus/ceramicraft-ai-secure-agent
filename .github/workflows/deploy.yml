@@ -64,5 +64,5 @@ jobs:
           git config user.name "${GIT_AUTHOR_NAME}"
           git config user.email "${GIT_AUTHOR_EMAIL}"
           git add helm_backend/ai-secure-agent-ms/values.yaml
-          git commit -m "chore(log-ms): bump tag to ${{ github.event.inputs.version }} [skip ci]" || echo "No changes to commit"
+          git commit -m "chore(ai-secure-agent-ms): bump tag to ${{ github.event.inputs.version }} [skip ci]" || echo "No changes to commit"
           git push origin HEAD:main

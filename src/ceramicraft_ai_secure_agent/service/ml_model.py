@@ -24,6 +24,7 @@ _MODEL_PATH: Path = (
     Path(__file__).resolve().parent.parent / "model" / "model_weights.json"
 )
 
+_MODEL_VERSION = "v3"
 _model = None
 
 
@@ -108,6 +109,7 @@ def predict(features: dict[str, Any]) -> dict[str, Any]:
             "fraud_probability": prob,
             "prediction": 1 if prob >= 0.5 else 0,
             "explanation": explanation,
+            "model_version": _MODEL_VERSION,
         }
     except Exception as e:
         logger.error(f"ML Prediction failed: {str(e)}")
