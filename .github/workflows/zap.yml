@@ -1,0 +1,68 @@
+name: ZAP DAST
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: '0 0 * * 0' # Run every Sunday at midnight
+
+jobs:
+  zap-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Start backing services
+        run: |
+          docker compose -f .github/ci/docker-compose.yml up -d --wait
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --frozen --no-dev
+
+      - name: Start application
+        env:
+          CONFIG_PATH: ${{ github.workspace }}/.github/ci/config.yml
+          MYSQL_PASSWORD: ci_root_password
+          ENABLE_MLFLOW_TRACING: "false"
+          LANGSMITH_TRACING: "false"
+          LANGCHAIN_TRACING_V2: "false"
+        run: |
+          uv run python -m ceramicraft_ai_secure_agent.app &
+          APP_PID=$!
+          echo "APP_PID=$APP_PID" >> "$GITHUB_ENV"
+
+      - name: Wait for application to be ready
+        run: |
+          timeout 60 bash -c \
+            'until curl -sf http://localhost:8080/ai-secure-agent-ms/v1/ping; do sleep 3; done'
+
+      - name: ZAP API Scan
+        uses: zaproxy/action-api-scan@v0.9.0
+        with:
+          target: 'http://localhost:8080/ai-secure-agent-ms/v1/openapi.json'
+          format: openapi
+          fail_action: false
+          allow_issue_writing: false
+          artifact_name: zap-report
+
+      - name: Stop application
+        if: always()
+        run: |
+          if [ -n "$APP_PID" ]; then kill "$APP_PID" || true; fi
+
+      - name: Stop backing services
+        if: always()
+        run: |
+          docker compose -f .github/ci/docker-compose.yml down
