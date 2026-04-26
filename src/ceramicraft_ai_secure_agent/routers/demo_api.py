@@ -2,14 +2,14 @@ from enum import Enum
 from pathlib import Path
 
 from fastapi import APIRouter
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 
 router = APIRouter(
     prefix="/ai-secure-agent/v1/demo",
     tags=["demo", "mock"],
 )
 
-DEMO_HTML_PATH = Path(__file__).parent / "demo_page.html"
+DEMO_HTML_PATH = Path(__file__).parent / "demo_page_external_full.html"
 DEMO_HTML_FALLBACK = "<html><body><h1>Demo page unavailable</h1></body></html>"
 try:
     DEMO_HTML = DEMO_HTML_PATH.read_text(encoding="utf-8")
@@ -17,6 +17,22 @@ except FileNotFoundError:
     DEMO_HTML = DEMO_HTML_FALLBACK
 except OSError:
     DEMO_HTML = DEMO_HTML_FALLBACK
+
+DEMO_CSS_PATH = Path(__file__).parent / "demo_page_full.css"
+try:
+    DEMO_CSS = DEMO_CSS_PATH.read_text(encoding="utf-8")
+except FileNotFoundError:
+    DEMO_CSS = ""
+except OSError:
+    DEMO_CSS = ""
+
+DEMO_JS_PATH = Path(__file__).parent / "demo_page_full.js"
+try:
+    DEMO_JS = DEMO_JS_PATH.read_text(encoding="utf-8")
+except FileNotFoundError:
+    DEMO_JS = ""
+except OSError:
+    DEMO_JS = ""
 
 
 class OpType(str, Enum):
@@ -60,3 +76,19 @@ def risk_access(user_id: int):
 def demo_page() -> str:
     """Interactive HTML page for demo APIs."""
     return DEMO_HTML
+
+
+@router.get("/page.css")
+async def demo_page_css():
+    return Response(
+        content=DEMO_CSS,
+        media_type="text/css",
+    )
+
+
+@router.get("/page.js")
+async def demo_page_js():
+    return Response(
+        content=DEMO_JS,
+        media_type="application/javascript",
+    )

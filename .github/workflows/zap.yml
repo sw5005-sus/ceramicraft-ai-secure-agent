@@ -53,9 +53,10 @@ jobs:
         with:
           target: 'http://localhost:8080/ai-secure-agent-ms/v1/openapi.json'
           format: openapi
-          fail_action: false
+          fail_action: true
           allow_issue_writing: false
           artifact_name: zap-report
+          rules_file_name: '.github/ci/zap.conf'
 
       - name: Stop application
         if: always()

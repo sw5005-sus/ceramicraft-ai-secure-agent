@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Demo API Interactive Page</title>
+    <link rel="stylesheet" href="/ai-secure-agent/v1/demo/page.css" />
+  </head>
+  <body>
+    <div class="container">
+      <h1>Demo API Interactive Page</h1>
+      <p>
+        Flow: generate mock data and review features first, then run risk
+        assessment.
+      </p>
+
+      <div class="row">
+        <div class="field">
+          <label for="userId">User ID</label>
+          <input id="userId" type="number" min="1" value="1001" />
+        </div>
+        <div class="field">
+          <label for="opType">Mock Type</label>
+          <select id="opType">
+            <option value="normal">normal</option>
+            <option value="block">block</option>
+            <option value="manual_review">manual_review</option>
+            <option value="watchlist">watchlist</option>
+            <option value="clear">clear</option>
+            <option value="query">query</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <button id="mockBtn">1) Generate Mock Data and Extract Features</button>
+        <button id="riskBtn" class="secondary" disabled>
+          2) Run Risk Assessment After Confirming Features
+        </button>
+      </div>
+
+      <div class="status" id="status"></div>
+
+      <div class="panel">
+        <strong>Feature Result</strong>
+        <div id="featureResult" class="result empty">No data yet.</div>
+      </div>
+
+      <div class="panel">
+        <strong>Risk Assessment Result</strong>
+        <div id="riskResult" class="result empty">No data yet.</div>
+      </div>
+    </div>
+
+    <script src="/ai-secure-agent/v1/demo/page.js"></script>
+  </body>
+</html>

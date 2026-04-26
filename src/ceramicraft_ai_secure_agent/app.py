@@ -56,6 +56,35 @@ FastAPIInstrumentor.instrument_app(app)
 app.include_router(demo_router)
 
 
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self'; "
+        "img-src 'self' data:; "
+        "connect-src 'self'; "
+        "object-src 'none'; "
+        "base-uri 'self'; "
+        "frame-ancestors 'none'; "
+        "form-action 'self'"
+    )
+
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = (
+        "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+    )
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+    response.headers["Cross-Origin-Embedder-Policy"] = "require-corp"
+
+    return response
+
+
 @app.get("/ai-secure-agent-ms/v1/ping", tags=["Health"])
 async def health_check() -> dict[str, str]:
     """Return a simple health-check response."""
@@ -87,6 +116,7 @@ async def verify_user(
     )
     if not validate_and_update_feature_with_request(user_request=userRequest):
         raise HTTPException(status_code=403, detail="User is blacklisted")
+
     return
 
 
